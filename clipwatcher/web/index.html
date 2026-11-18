@@ -343,7 +343,7 @@
           <div class="ed-lab v"><svg class="i"><use href="#i-film"/></svg>Video</div>
           <div class="ed-lab t"><svg class="i"><use href="#i-type"/></svg>Text</div>
           <div class="ed-lab m"><svg class="i"><use href="#i-music"/></svg>Music</div>
-          <div class="ed-lab w">Sound</div>
+          <div class="ed-lab w" title="The video's own sound: click to set its volume">Sound</div>
         </div>
         <div class="ed-scroll" id="ed-scroll">
           <div class="ed-inner" id="ed-inner">
@@ -353,11 +353,15 @@
             <div class="ed-lane m" id="ed-lane-music"></div>
             <canvas class="ed-lane w" id="ed-wave"></canvas>
             <div class="ed-playhead" id="ed-playhead"><i></i></div>
+            <div class="ed-dropline" id="ed-dropline" hidden></div>
           </div>
         </div>
       </div>
     </div>
     <video id="ed-video" playsinline preload="auto" hidden></video>
+    <div class="ed-drop" id="ed-drop" hidden>
+      <div><svg class="i"><use href="#i-music"/></svg>Drop to add as music <span id="ed-drop-at">at the playhead</span></div>
+    </div>
     <div class="ed-dlg" id="ed-dlg" hidden>
       <div class="ed-dlg-card" role="dialog" aria-modal="true" aria-labelledby="ed-dlg-title">
         <h3 id="ed-dlg-title">Exporting…</h3>

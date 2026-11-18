@@ -170,7 +170,7 @@ Click **Edit** on any clip for a Clipchamp-style editor. **The original clip is 
 - **Text:** presets (hook title band, big reaction, subtitle box, label); drag text on the video; size, colours, fade or pop-in; set when it shows on the text track.
 - **Captions** that follow your cuts and speed changes, in any of the 4 styles (when the clip's 1-minute source still exists).
 - **Frame:** 9:16 (Reels / Shorts), 4:5 (Instagram feed) or 1:1; blurred / crop / facecam-split layouts from the source, or fill / whole-video-with-blur from the finished clip; zoom & pan.
-- **Audio:** the clip's volume and fades; **upload music or sounds** (MP3, M4A, WAV, OGG up to 30 MB, kept in `music/`), place them on the music track, trim, set volume and fades.
+- **Audio:** click the **Sound** track to set the video's own volume (M mutes it) and fades; **drag & drop music or sounds** onto the editor or upload them (MP3, M4A, WAV, OGG up to 30 MB, kept in `music/`), place them on the music track, trim, set volume and fades.
 - **Undo / redo** (Ctrl+Z / Ctrl+Shift+Z) and keyboard shortcuts; your edit is saved as you go and comes back when you reopen it.
 - **Export** runs in the background at low priority with a progress bar, then **Download**.
 

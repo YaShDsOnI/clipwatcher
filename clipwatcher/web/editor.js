@@ -50,6 +50,7 @@
   function selected() {
     const s = ED.sel;
     if (!s) return null;
+    if (s.type === "sound") return P().audio;          // the original video's own sound
     const list = s.type === "seg" ? P().segments : s.type === "text" ? P().texts : P().music;
     return list[s.i] || null;
   }
@@ -478,19 +479,41 @@
         `style="left:${starts[i] * ED.pps}px;width:${Math.max(4, segDur(s) * ED.pps - 2)}px;${strip}">` +
         `<span class="h l" data-h="l"></span><span class="ed-seg-tag">${tags.join("")}</span><span class="h r" data-h="r"></span></div>`;
     }).join("");
+    const textRows = stackRows(P().texts.map((t) => [t.start, t.end]), "t");
     $("#ed-lane-text").innerHTML = P().texts.map((t, i) => {
       const sel = ED.sel?.type === "text" && ED.sel.i === i;
-      return `<div class="ed-bar text${sel ? " sel" : ""}" data-text="${i}" style="left:${t.start * ED.pps}px;width:${Math.max(6, (t.end - t.start) * ED.pps)}px">` +
+      return `<div class="ed-bar text${sel ? " sel" : ""}" data-text="${i}" style="left:${t.start * ED.pps}px;width:${Math.max(6, (t.end - t.start) * ED.pps)}px;${textRows[i]}">` +
         `<span class="h l" data-h="l"></span><span class="ed-bar-label">${esc(t.text.replace(/\n/g, " "))}</span><span class="h r" data-h="r"></span></div>`;
     }).join("");
     const names = new Map(ED.data.music.map((x) => [x.id, x.name]));
+    const musicRows = stackRows(P().music.map((x) => [x.start, x.start + x.dur]), "m");
     $("#ed-lane-music").innerHTML = P().music.map((x, i) => {
       const sel = ED.sel?.type === "music" && ED.sel.i === i;
-      return `<div class="ed-bar music${sel ? " sel" : ""}" data-music="${i}" style="left:${x.start * ED.pps}px;width:${Math.max(6, x.dur * ED.pps)}px">` +
+      return `<div class="ed-bar music${sel ? " sel" : ""}" data-music="${i}" style="left:${x.start * ED.pps}px;width:${Math.max(6, x.dur * ED.pps)}px;${musicRows[i]}">` +
         `<span class="h l" data-h="l"></span>${icon("music")}<span class="ed-bar-label">${esc(names.get(x.id) || "sound")}</span><span class="h r" data-h="r"></span></div>`;
     }).join("");
+    const soundSel = ED.sel?.type === "sound", vol = P().audio.volume;
+    $("#ed-wave").classList.toggle("sel", soundSel);
+    const lab = $(".ed-lab.w");
+    lab.classList.toggle("sel", soundSel);
+    lab.innerHTML = `Sound<small>${vol === 0 ? "muted" : `${Math.round(vol * 100)}%`}</small>`;
     drawWave();
     updateClock();
+  }
+  // items that overlap in time go on separate rows of their track (and the track grows to fit)
+  function stackRows(spans, track) {
+    const ends = [], rowOf = [];
+    spans.map(([a, b], i) => ({ a, b, i })).sort((x, y) => x.a - y.a).forEach(({ a, b, i }) => {
+      let r = ends.findIndex((e) => e <= a + 1e-6);
+      if (r < 0) { r = ends.length; ends.push(0); }
+      ends[r] = b;
+      rowOf[i] = r;
+    });
+    const rows = Math.max(1, ends.length), rowH = 30;
+    const height = `${rows * rowH + 4}px`;
+    $(`.ed-lane.${track}`).style.height = height;
+    $(`.ed-lab.${track}`).style.height = height;
+    return rowOf.map((r) => `top:${4 + r * rowH}px;height:${rowH - 4}px;bottom:auto`);
   }
   function drawWave() {
     const cv = $("#ed-wave");
@@ -535,6 +558,10 @@
       const item = (type === "text" ? P().texts : P().music)[i];
       select({ type, i });
       drag = { kind: type, i, handle, x0: x, item: { ...item } };
+    } else if (e.target.id === "ed-wave") {           // the Sound track: the original video's sound
+      select({ type: "sound" });
+      drag = { kind: "scrub" };
+      seekTo(x / ED.pps);
     } else {
       if (e.target.closest(".ed-lane") && !e.target.closest("#ed-ruler")) select(null);
       drag = { kind: "scrub" };
@@ -621,6 +648,7 @@
   function removeSelected() {
     const s = ED.sel;
     if (!s) { toast("Select a part, text or sound on the timeline first."); return; }
+    if (s.type === "sound") { toast("The video's own sound can't be removed: set its volume to 0 or press M to mute it."); return; }
     if (s.type === "seg" && P().segments.length < 2) { toast("This is the only part left: trim its edges instead."); return; }
     edit((p) => { (s.type === "seg" ? p.segments : s.type === "text" ? p.texts : p.music).splice(s.i, 1); });
     if (s.type === "music") loadMusicAudio();
@@ -718,10 +746,13 @@
       const a = p.audio;
       html = `<h3>Audio</h3><h4>Clip sound</h4>` + slider("Volume", "audio.volume", 0, 200, 1, a.volume, "%", 0.01) +
         slider("Fade in", "audio.fade_in", 0, 5, 0.1, a.fade_in, "s") + slider("Fade out", "audio.fade_out", 0, 5, 0.1, a.fade_out, "s") +
-        `<h4>Music &amp; sounds</h4><p>Upload an MP3, M4A, WAV or OGG (up to 30 MB), then add it at the playhead.</p>` +
-        `<div class="ed-btns"><label class="button">${icon("upload")}Upload<input type="file" id="ed-upload" accept=".mp3,.m4a,.wav,.ogg,audio/*" hidden></label></div>` +
-        (d.music.length ? `<ul class="ed-list" style="margin-top:10px">${d.music.map((m) =>
-          `<li><span class="grow" title="${esc(m.name)}">${icon("music")} ${esc(m.name)}</span><span class="muted small">${fmt(m.duration)}</span>` +
+        `<div class="ed-btns" style="margin:-4px 0 0"><button type="button" data-act="select-sound">Select the Sound track</button></div>` +
+        `<h4>Music &amp; sounds</h4>` +
+        `<label class="ed-dropzone">${icon("upload")}<span><b>Drop audio files here</b> or anywhere on the editor, or click to choose` +
+        `<br><small>MP3, M4A, WAV or OGG, up to 30 MB</small></span>` +
+        `<input type="file" id="ed-upload" accept=".mp3,.m4a,.wav,.ogg,audio/*" hidden></label>` +
+        (d.music.length ? `<p class="small" style="margin:12px 0 6px">Drag a sound onto the timeline, or press Add (at the playhead).</p><ul class="ed-list">${d.music.map((m) =>
+          `<li draggable="true" data-drag-music="${esc(m.id)}" title="Drag onto the timeline"><span class="grow">${icon("music")} ${esc(m.name)}</span><span class="muted small">${fmt(m.duration)}</span>` +
           `<button type="button" data-add-music="${esc(m.id)}">Add</button></li>`).join("")}</ul>` : `<p class="muted small" style="margin-top:8px">No sounds uploaded yet.</p>`);
     } else if (ED.tab === "exports") {
       html = `<h3>Exports</h3><p>Each export is a new video. The original clip stays as it is.</p>` +
@@ -742,10 +773,22 @@
     if (!s || !item) {
       const { total } = timing();
       el.innerHTML = `<h3>Edit</h3><p>${P().segments.length} part${P().segments.length === 1 ? "" : "s"} · ${fmt(total)} long. ` +
-        `Click a part, text or sound on the timeline to change it.</p><h4>Shortcuts</h4><div class="ed-keys">` +
-        [["Space", "play / pause"], ["S", "split at the playhead"], ["Del", "delete the selection"], ["T", "add text"],
+        `Click a part, text or music on the timeline to change it, or the <b>Sound</b> track for the video's own volume. ` +
+        `Drop music files anywhere here to add them.</p><h4>Shortcuts</h4><div class="ed-keys">` +
+        [["Space", "play / pause"], ["S", "split at the playhead"], ["Del", "delete the selection"], ["T", "add text"], ["M", "mute the video's sound"],
          ["← →", "one frame"], ["Shift ← →", "one second"], ["Ctrl Z", "undo"], ["Ctrl ⇧ Z", "redo"], ["Ctrl wheel", "zoom the timeline"], ["Esc", "close"]]
           .map(([k, v]) => `<kbd>${k}</kbd><span>${v}</span>`).join("") + `</div>`;
+      return;
+    }
+    if (s.type === "sound") {
+      const muted = item.volume === 0;
+      el.innerHTML = `<h3>${icon("film")} Original sound</h3><p>The sound of the video itself (voices, game audio). ` +
+        `It plays under any music you add.</p>` +
+        slider("Volume", "sel.volume", 0, 200, 1, item.volume, "%", 0.01) +
+        `<div class="ed-btns" style="margin:-4px 0 12px"><button type="button" data-act="mute">${muted ? "Unmute" : "Mute"} (M)</button>` +
+        `<button type="button" data-act="vol100">100%</button></div>` +
+        slider("Fade in", "sel.fade_in", 0, 5, 0.1, item.fade_in, "s") + slider("Fade out", "sel.fade_out", 0, 5, 0.1, item.fade_out, "s") +
+        `<p class="small">Tip: drop music files anywhere on the editor to add them.</p>`;
       return;
     }
     if (s.type === "seg") {
@@ -849,6 +892,9 @@
     else if (act === "export") startExport();
     else if (act === "facecam") drawFacecam();
     else if (act === "unzoom") edit((p) => Object.assign(p.frame, { zoom: 1, x: 0.5, y: 0.5 }), null, { panel: true });
+    else if (act === "mute") toggleMute();
+    else if (act === "select-sound") select({ type: "sound" });
+    else if (act === "vol100") edit((p) => { p.audio.volume = 1; });
     else if (act === "punch-on") {
       const { starts } = timing(), i = ED.sel.i, s = P().segments[i];
       const at = r3(clamp(ED.t - starts[i], 0, Math.max(0, segDur(s) - 0.3)));
@@ -867,6 +913,14 @@
       toast("Edit reset (Ctrl+Z to undo)");
     }
   }
+  function toggleMute() {
+    const muting = P().audio.volume > 0;
+    edit((p) => {
+      if (muting) { ED.unmuteTo = p.audio.volume; p.audio.volume = 0; } else p.audio.volume = ED.unmuteTo || 1;
+    });
+    toast(muting ? "Original sound muted (M to unmute)" : `Original sound back at ${Math.round(P().audio.volume * 100)}%`);
+  }
+  $(".ed-labels").addEventListener("click", (e) => { if (e.target.closest(".ed-lab.w")) select({ type: "sound" }); });
   function drawFacecam() {
     openFacecam(ED.data.channel, P().frame.facecam, (box) => {
       edit((p) => { p.frame.facecam = box; if (!box && p.frame.layout === "split") p.frame.layout = "blur"; }, null, { panel: true });
@@ -874,7 +928,7 @@
   }
 
   // ------------------------------------------------------------------ music
-  async function uploadMusic(file) {
+  async function uploadMusic(file, at = null) {
     if (!file) return;
     if (file.size > 30e6) { toast("Choose an audio file under 30 MB."); return; }
     toast(`Uploading ${file.name}…`);
@@ -884,19 +938,81 @@
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || `Upload failed (${res.status})`);
       ED.data.music = [...ED.data.music.filter((m) => m.id !== data.id), data];
-      renderPanel();
-      addMusic(data.id);
+      if (ED.tab === "audio") renderPanel();
+      addMusic(data.id, at);
     } catch (ex) { toast(ex.message); }
   }
   $("#ed-panel").addEventListener("change", (e) => { if (e.target.id === "ed-upload") uploadMusic(e.target.files[0]); });
-  function addMusic(id) {
+  function addMusic(id, at = null) {
     const lib = ED.data.music.find((m) => m.id === id), { total } = timing();
     if (!lib) return;
-    const start = r3(ED.t >= total - 0.2 ? 0 : ED.t);
+    const start = r3(at != null ? clamp(at, 0, Math.max(0, total - 0.1)) : ED.t >= total - 0.2 ? 0 : ED.t);
     edit((p) => p.music.push({ id, start, offset: 0, dur: r3(Math.min(lib.duration, total - start)), volume: 0.4, fade_in: 0, fade_out: 1 }));
     loadMusicAudio();
     select({ type: "music", i: P().music.length - 1 });
     toast(`Added ${lib.name}. Drag it on the Music track; its edges trim it.`);
+  }
+
+  // ------------------------------------------------------------------ drag & drop audio
+  // Files from the PC, or sounds dragged from the Audio panel: dropped on the timeline they start at
+  // that moment, anywhere else at the playhead. Listens on the window, so a toast or dialog under the
+  // pointer can't swallow the drop.
+  const MUSIC_TYPE = "application/x-clipwatcher-music";
+  const AUDIO_FILE = /\.(mp3|m4a|wav|ogg)$/i;
+  let dropDepth = 0;
+  const dragKinds = (e) => [...(e.dataTransfer?.types || [])];
+  const isAudioDrag = (e) => dragKinds(e).includes("Files") || dragKinds(e).includes(MUSIC_TYPE);
+  function dropTime(e) {
+    const sc = $("#ed-scroll").getBoundingClientRect(), { total } = timing();
+    if (e.clientY < sc.top || e.clientY > sc.bottom || e.clientX < sc.left) return null;
+    return clamp((e.clientX - $("#ed-inner").getBoundingClientRect().left) / ED.pps, 0, Math.max(0, total - 0.1));
+  }
+  function showDrop(on, e) {
+    $("#ed-drop").hidden = !on;
+    const line = $("#ed-dropline"), t = on && e ? dropTime(e) : null;
+    line.hidden = t == null;
+    if (t != null) { line.style.left = `${t * ED.pps}px`; $("#ed-drop-at").textContent = `at ${fmt(t)}`; }
+    else $("#ed-drop-at").textContent = "at the playhead";
+    $("#ed-lane-music").classList.toggle("drop-target", t != null);
+  }
+  window.addEventListener("dragenter", (e) => {
+    if (!ED.open || !isAudioDrag(e)) return;
+    e.preventDefault();
+    dropDepth += 1;
+    showDrop(true, e);
+  });
+  window.addEventListener("dragover", (e) => {
+    if (!ED.open || !isAudioDrag(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    showDrop(true, e);
+  });
+  window.addEventListener("dragleave", () => {
+    if (!ED.open) return;
+    dropDepth = Math.max(0, dropDepth - 1);
+    if (!dropDepth) showDrop(false);
+  });
+  window.addEventListener("drop", async (e) => {
+    if (!ED.open || !isAudioDrag(e)) return;
+    e.preventDefault();
+    const at = dropTime(e);
+    dropDepth = 0;
+    showDrop(false);
+    const id = e.dataTransfer.getData(MUSIC_TYPE);
+    if (id) { addMusic(id, at); return; }
+    const files = [...e.dataTransfer.files].filter((f) => AUDIO_FILE.test(f.name) || f.type.startsWith("audio/"));
+    if (!files.length) { toast("Drop an MP3, M4A, WAV or OGG file to add it as music."); return; }
+    for (const f of files) await uploadMusic(f, at);
+  });
+  $("#ed-panel").addEventListener("dragstart", (e) => {
+    const li = e.target.closest("[data-drag-music]");
+    if (!li) return;
+    e.dataTransfer.setData(MUSIC_TYPE, li.dataset.dragMusic);
+    e.dataTransfer.effectAllowed = "copy";
+  });
+  // any other file dropped while the editor is open must not make the browser leave the page
+  for (const type of ["dragover", "drop"]) {
+    window.addEventListener(type, (e) => { if (ED.open && dragKinds(e).includes("Files")) e.preventDefault(); });
   }
 
   // ------------------------------------------------------------------ export
@@ -1000,6 +1116,7 @@
     else if (e.key === "s" || e.key === "S") { e.preventDefault(); split(); }
     else if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); removeSelected(); }
     else if (e.key === "t" || e.key === "T") { e.preventDefault(); addText("hook"); }
+    else if (e.key === "m" || e.key === "M") { e.preventDefault(); toggleMute(); }
     else if (e.key === "ArrowLeft") { e.preventDefault(); pause(); seekTo(ED.t - (e.shiftKey ? 1 : frame)); }
     else if (e.key === "ArrowRight") { e.preventDefault(); pause(); seekTo(ED.t + (e.shiftKey ? 1 : frame)); }
     else if (e.key === "Home") { e.preventDefault(); pause(); seekTo(0, true); }

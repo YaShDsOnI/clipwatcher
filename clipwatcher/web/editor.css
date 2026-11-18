@@ -132,6 +132,31 @@ canvas.ed-lane { width: 100%; }
 .h::before { content: ""; position: absolute; top: 25%; bottom: 25%; left: 3px; width: 3px; border-radius: 2px; background: rgba(255, 255, 255, .85); opacity: 0; }
 .ed-seg:hover .h::before, .ed-bar:hover .h::before, .sel .h::before { opacity: 1; }
 
+/* ---------- the Sound track (the video's own sound) */
+#ed-wave { cursor: pointer; border-radius: 6px; }
+#ed-wave:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+#ed-wave.sel { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); }
+.ed-lab.w { cursor: pointer; }
+.ed-lab.w small { margin-left: auto; font-weight: 600; font-size: 10.5px; color: var(--muted); }
+.ed-lab.w.sel, .ed-lab.w.sel small { color: var(--accent); }
+
+/* ---------- drag & drop audio */
+.ed-drop { position: absolute; inset: 0; z-index: 6; pointer-events: none; display: flex; justify-content: center; align-items: flex-start;
+  padding-top: 76px; border: 3px dashed var(--accent); background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.ed-drop > div { display: flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 12px; background: var(--accent);
+  color: var(--accent-ink); font-weight: 700; box-shadow: var(--shadow-lg); }
+.ed-drop svg.i { width: 18px; height: 18px; }
+.ed-dropline { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--accent); z-index: 5; pointer-events: none;
+  box-shadow: 0 0 0 3px var(--accent-soft); }
+.ed-lane.m.drop-target { background: var(--accent-soft); }
+.ed-dropzone { display: flex; align-items: center; gap: 12px; padding: 14px; border: 2px dashed var(--border); border-radius: 12px;
+  cursor: pointer; font-size: 13px; color: var(--muted); transition: border-color .15s, background .15s; }
+.ed-dropzone:hover { border-color: var(--accent); background: var(--accent-soft); }
+.ed-dropzone svg.i { width: 22px; height: 22px; color: var(--accent); }
+.ed-dropzone b { color: var(--text); }
+.ed-list li[draggable="true"] { cursor: grab; }
+.ed-list li[draggable="true"]:active { cursor: grabbing; }
+
 /* ---------- export dialog */
 .ed-dlg { position: absolute; inset: 0; z-index: 5; display: grid; place-items: center; background: rgba(5, 5, 10, .6); backdrop-filter: blur(3px); }
 .ed-dlg-card { width: min(440px, calc(100vw - 32px)); padding: 22px; border-radius: 16px; background: var(--panel); border: 1px solid var(--border); box-shadow: var(--shadow-lg); }
