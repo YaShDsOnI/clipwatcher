@@ -65,3 +65,6 @@ ignore = [
     "E741",   # `l` as a label variable in the speaker clustering reads fine there
     "B008",   # argparse defaults computed at parse time are intended
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"clipwatcher/captions.py" = ["E501"]   # ASS subtitle style lines are long by format

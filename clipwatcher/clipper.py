@@ -111,32 +111,39 @@ def render_lock():
 
 # --------------------------------------------------------------------------- video
 
-def video_filter(layout: str, facecam, ass_file: str | None) -> str:
-    """ffmpeg filter graph for the 1080x1920 output. ass_file is a plain file name in the work
-    folder (ffmpeg runs there), so no Windows drive letters end up inside the filter string."""
+def video_filter(layout: str, facecam, ass_file: str | None, size: tuple[int, int] = (OUT_W, OUT_H),
+                 src: str = "[0:v]", out: str = "[v]") -> str:
+    """ffmpeg filter graph that frames a landscape video into a WxH output (1080x1920 by default).
+    ass_file is a plain file name in the work folder (ffmpeg runs there), so no Windows drive
+    letters end up inside the filter string. src/out are the graph labels to read and write."""
+    w_out, h_out = size
+    tag = out.strip("[]")                  # keeps the inner labels unique when used inside a bigger graph
     if layout == "split" and facecam:
         x, y, w, h = (min(max(float(v), 0.0), 1.0) for v in facecam)
-        bottom_h = OUT_H - SPLIT_TOP
-        v = (f"[0:v]split[a][b];"
+        top = SPLIT_TOP if size == (OUT_W, OUT_H) else round(h_out * 0.4 / 2) * 2
+        bottom_h = h_out - top
+        v = (f"{src}split[{tag}a][{tag}b];"
              # top: the streamer's facecam, filled to the band
-             f"[a]crop=iw*{w:.4f}:ih*{h:.4f}:iw*{x:.4f}:ih*{y:.4f},"
-             f"scale={OUT_W}:{SPLIT_TOP}:force_original_aspect_ratio=increase,crop={OUT_W}:{SPLIT_TOP}[top];"
+             f"[{tag}a]crop=iw*{w:.4f}:ih*{h:.4f}:iw*{x:.4f}:ih*{y:.4f},"
+             f"scale={w_out}:{top}:force_original_aspect_ratio=increase,crop={w_out}:{top}[{tag}top];"
              # bottom: the gameplay, centre-cropped to the remaining shape
-             f"[b]crop=trunc(ih*{OUT_W / bottom_h:.5f}/2)*2:ih,scale={OUT_W}:{bottom_h}[bot];"
-             f"[top][bot]vstack,setsar=1")
+             f"[{tag}b]crop=trunc(ih*{w_out / bottom_h:.5f}/2)*2:ih,scale={w_out}:{bottom_h}[{tag}bot];"
+             f"[{tag}top][{tag}bot]vstack,setsar=1")
     elif layout == "crop":
-        v = f"[0:v]crop=trunc(ih*9/16/2)*2:ih,scale={OUT_W}:{OUT_H},setsar=1"
+        ratio = "9/16" if size == (OUT_W, OUT_H) else f"{w_out / h_out:.5f}"
+        v = f"{src}crop=trunc(ih*{ratio}/2)*2:ih,scale={w_out}:{h_out},setsar=1"
     else:
-        v = (f"[0:v]split[a][b];"
-             f"[a]scale=270:480:force_original_aspect_ratio=increase,crop=270:480,boxblur=8:2,"
-             f"scale={OUT_W}:{OUT_H},eq=brightness=-0.28[bg];"
-             f"[b]scale={OUT_W}:-2[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1")
+        bw, bh = w_out // 4 // 2 * 2, h_out // 4 // 2 * 2
+        v = (f"{src}split[{tag}a][{tag}b];"
+             f"[{tag}a]scale={bw}:{bh}:force_original_aspect_ratio=increase,crop={bw}:{bh},boxblur=8:2,"
+             f"scale={w_out}:{h_out},eq=brightness=-0.28[{tag}bg];"
+             f"[{tag}b]scale={w_out}:-2[{tag}fg];[{tag}bg][{tag}fg]overlay=(W-w)/2:(H-h)/2,setsar=1")
     if ass_file:
         v += f",ass={ass_file}:fontsdir=fonts"
-    return v + "[v]"
+    return v + out
 
 
-def _fonts_in_work_dir() -> None:
+def fonts_in_work_dir() -> None:
     """The caption font next to the .ass file, where ffmpeg (running in the work folder) finds it."""
     src = FONT_DIR / FONT_FILE
     if not src.exists():
@@ -394,7 +401,7 @@ def render(meta_path: Path, threads: int, retranscribe: bool = False, retitle: b
         title = meta.get("title") if mode != "off" and settings.get("title_in_video") else None
         if (win and settings["captions"]) or title:
             write_ass(win, ass, settings, title)
-            _fonts_in_work_dir()
+            fonts_in_work_dir()
         layout = settings["layout"]
         if layout == "split" and not settings.get("facecam"):
             log(f"{name}: split layout needs a facecam box (set it in the dashboard); using blur")

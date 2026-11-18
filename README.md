@@ -18,6 +18,7 @@
   <a href="#quick-start">Quick start</a> ·
   <a href="#features">Features</a> ·
   <a href="#how-it-works">How it works</a> ·
+  <a href="#editor">Editor</a> ·
   <a href="#dashboard">Dashboard</a> ·
   <a href="#configuration">Configuration</a> ·
   <a href="SETUP%20GUIDE.txt">Setup guide</a>
@@ -56,8 +57,8 @@ In the spirit of [SupoClip](https://github.com/FujiwaraChoki/supoclip) and OpusC
       AI models load only while a clip is being made (~600 MB for ~20 s), then the memory goes straight back. One clip at a time, at low priority.
     </td>
     <td valign="top">
-      <b>Local dashboard</b><br>
-      Record several streamers, watch, trim and restyle clips, and find every clip in its own streamer folder, ready to upload.
+      <b>Built-in video editor</b><br>
+      Cut, split, speed up, add text, music and zoom punch-ins, reframe for Reels, Shorts or feed, then export a new file. The original is never changed.
     </td>
   </tr>
 </table>
@@ -150,12 +151,38 @@ A local web page, reachable only from this computer.
 - **Gallery:** every clip with thumbnail, hook title, hype/virality score and a NEW badge. Clips still being made show a spinner.
 - **Find:** search by what was said or by title, filter by streamer, and sort **newest first** or **best first** (by virality/hype score).
 - **Player:** plays the clip with its transcript (click a line to jump there). It shows the scores, the folder the clip is saved in and, with an AI set up, a suggested post caption with hashtags and a Copy button.
-- **Edit clip:** **trim** within the saved 1-minute source, or **restyle** (layout, caption style, hook title) and re-render. A re-render reuses the transcript, so it takes a few seconds and uses no AI memory.
+- **Edit:** opens the clip in the [editor](#editor). Edited versions are listed under the clip, ready to watch, download or delete.
+- **New title:** asks the AI (or chat) for a new hook title. Only the title shown in the dashboard changes.
 - **Delete:** click twice. It removes the clip, its captions, source and metadata.
 
 **Setup:** which optional parts are installed, the caption model, and **Storage**: space used per streamer and how long to keep things (see [Disk space](#disk-space)).
 
 The header shows how many streamers are recording, whether the AI step is working and free disk space. The streamer list is saved in `streamers.json` (see [`streamers.example.json`](streamers.example.json)); each streamer's output goes to `logs/<channel>.log`. Ctrl+C in the dashboard's terminal stops every streamer cleanly first.
+
+## Editor
+
+Click **Edit** on any clip for a Clipchamp-style editor. **The original clip is never changed:** every export is a new MP4 in `clips/<streamer>/edits/`.
+
+- **Timeline** with thumbnails and the sound's waveform; zoom with the slider or Ctrl + mouse wheel.
+- **Cut:** drag a part's edges to trim it, **split** at the playhead (S), select a part and **delete** it (Del) to cut out the middle.
+- **Speed** per part: 0.5× to 2×, video and sound together.
+- **Zoom punch-in** per part: zooms in on a moment and holds it, the classic reaction effect.
+- **Text:** presets (hook title band, big reaction, subtitle box, label); drag text on the video; size, colours, fade or pop-in; set when it shows on the text track.
+- **Captions** that follow your cuts and speed changes, in any of the 4 styles (when the clip's 1-minute source still exists).
+- **Frame:** 9:16 (Reels / Shorts), 4:5 (Instagram feed) or 1:1; blurred / crop / facecam-split layouts from the source, or fill / whole-video-with-blur from the finished clip; zoom & pan.
+- **Audio:** the clip's volume and fades; **upload music or sounds** (MP3, M4A, WAV, OGG up to 30 MB, kept in `music/`), place them on the music track, trim, set volume and fades.
+- **Undo / redo** (Ctrl+Z / Ctrl+Shift+Z) and keyboard shortcuts; your edit is saved as you go and comes back when you reopen it.
+- **Export** runs in the background at low priority with a progress bar, then **Download**.
+
+What the edit is cut from:
+
+| | 1-minute source | 30-second clip |
+|---|---|---|
+| Available | for `KEEP_SOURCES_DAYS` (default 7) | always |
+| Cut, speed, punch-ins, text, music, size | ✓ | ✓ |
+| Blurred / crop / facecam-split layouts | ✓ | fill or whole-video-with-blur |
+| Captions re-timed to your cuts, any style | ✓ | already in the picture |
+| Go beyond the original 30 s | ✓ (15 s each side) | |
 
 ## Command line
 
@@ -232,7 +259,7 @@ In the dashboard's **Setup → Storage** (saved in `.env`):
 
 | Setting | Default | |
 |---|---|---|
-| `KEEP_SOURCES_DAYS` | 7 | delete a clip's 1-minute source after this many days. The clip stays; it just can't be trimmed or re-rendered any more. `0` = keep forever |
+| `KEEP_SOURCES_DAYS` | 7 | delete a clip's 1-minute source after this many days. The clip stays, and the editor then works from the finished clip. `0` = keep forever |
 | `KEEP_CLIPS_DAYS` | 0 | delete whole clips after this many days. `0` = keep forever |
 
 Cleanup runs when the dashboard starts and every hour after that, and never touches a clip that is still being made. When the disk has less than 3 GB free, new clips are skipped (and the dashboard says so) instead of filling the disk.
@@ -296,7 +323,7 @@ clip-watcher never downloads or installs anything on its own. Everything beyond 
 - **Dashboard → Setup tab:** lists every part as installed or not, with its size and what it's for. Click **Download** / **Install**, then **Click again to confirm**. You also choose the caption model there: `tiny` uses the least RAM, `base` is the default, and `small` gives the best captions.
 - **Terminal:** `clip-watcher setup` (or `python -m clipwatcher setup`) lists the parts and asks y/N for each one. Name parts to fetch just those, e.g. `clip-watcher setup whisper-tiny speaker-models`.
 
-If a clip was made while its caption model was missing, re-render it from the clip editor after downloading the model, and the captions are added.
+If a clip was made while its caption model was missing, download the model, then re-render it from the command line: `clip-watcher render clips/.meta/<clip>.json --retranscribe`.
 
 ### Data folder
 
@@ -324,11 +351,13 @@ clipwatcher/
   captions.py     .srt and burned-in .ass captions, caption styles
   ai.py           hook titles and scores: from chat, or from an AI provider
   components.py   optional parts and the opt-in setup
+  editor.py       the video editor: checks an edit, renders it with ffmpeg into a new file
+  avatars.py      streamers' Twitch profile pictures for the dashboard
   storage.py      per-streamer folders, retention, disk-space checks
   dashboard.py    the local web server
-  web/            the dashboard page (plain HTML/CSS/JS, no build step)
+  web/            the dashboard and editor pages (plain HTML/CSS/JS, no build step)
   fonts/          caption font (Montserrat, SIL OFL)
-tests/            pytest suite (no network, no ffmpeg needed)
+tests/            pytest suite (no network; the export test is skipped without ffmpeg)
 tools/            build_zip.py: builds the Windows download
 docs/assets/      banner and social preview image
 ```

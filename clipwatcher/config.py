@@ -38,6 +38,9 @@ SOURCE_DIR = CLIP_DIR / ".sources"      # source cut per clip, kept so clips can
 META_DIR = CLIP_DIR / ".meta"           # one job/metadata JSON per clip
 WORK_DIR = CLIP_DIR / ".work"           # temporary audio / captions / renders
 THUMB_DIR = CLIP_DIR / ".thumbs"        # gallery thumbnails
+PROJECT_DIR = CLIP_DIR / ".projects"    # editor projects (what was cut, texts, music...), one per clip
+CACHE_DIR = CLIP_DIR / ".cache"         # editor filmstrips and waveforms
+MUSIC_DIR = HOME / "music"              # music and sounds uploaded in the editor
 REC_DIR = HOME / "rec"                  # full stream recordings while a stream is live
 RUN_DIR = HOME / "run"                  # locks, stop files, chat history between restarts
 LOG_DIR = HOME / "logs"                 # one log per streamer (written by the dashboard)
@@ -71,6 +74,18 @@ def clip_file(name: str, channel: str | None = None) -> Path:
 
 def meta_path_for(clip_name: str) -> Path:
     return META_DIR / (Path(clip_name).stem + ".json")
+
+
+def project_path_for(clip_name: str) -> Path:
+    return PROJECT_DIR / (Path(clip_name).stem + ".json")
+
+
+def edits_dir(clip_name: str, channel: str | None = None) -> Path:
+    """Where edited versions of a clip are exported: clips/<channel>/edits/. The original is never touched."""
+    return clip_file(clip_name, channel).parent / "edits"
+
+
+EDIT_NAME_RE = re.compile(r"[\w.-]+_edit-\d{8}-\d{6}\.mp4")
 
 
 def is_plain_name(name: str, suffixes: tuple[str, ...] = ("mp4",)) -> bool:

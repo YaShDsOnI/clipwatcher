@@ -6,6 +6,7 @@
   <title>clipwatcher</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%237c5cff'/%3E%3Crect x='7.5' y='17' width='4' height='8' rx='1.5' fill='white' opacity='.7'/%3E%3Crect x='14' y='8' width='4' height='17' rx='1.5' fill='white'/%3E%3Crect x='20.5' y='13' width='4' height='12' rx='1.5' fill='white' opacity='.85'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/editor.css">
   <script>
     // apply the saved theme before the page paints (no flash)
     try { const t = localStorage.getItem("cw-theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}
@@ -40,6 +41,20 @@
       <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/><rect x="9" y="9" width="6" height="6" rx="1"/><path d="M9 1.5V5M15 1.5V5M9 19v3.5M15 19v3.5M1.5 9H5M1.5 15H5M19 9h3.5M19 15h3.5"/></symbol>
       <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></symbol>
       <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></symbol>
+      <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></symbol>
+      <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></symbol>
+      <symbol id="i-redo" viewBox="0 0 24 24"><path d="M15 14l5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/></symbol>
+      <symbol id="i-aspect" viewBox="0 0 24 24"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M9.5 6.5h5M9.5 17.5h5"/></symbol>
+      <symbol id="i-type" viewBox="0 0 24 24"><path d="M4 7V4.5h16V7M9 19.5h6M12 4.5v15"/></symbol>
+      <symbol id="i-music" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></symbol>
+      <symbol id="i-skip" viewBox="0 0 24 24"><path d="M19 20L9 12l10-8z"/><path d="M5 19V5"/></symbol>
+      <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="4.5" width="4" height="15" rx="1.2"/><rect x="14" y="4.5" width="4" height="15" rx="1.2"/></symbol>
+      <symbol id="i-zoomin" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35M11 8v6M8 11h6"/></symbol>
+      <symbol id="i-zoomout" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35M8 11h6"/></symbol>
+      <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M12 14l4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></symbol>
+      <symbol id="i-punch" viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></symbol>
+      <symbol id="i-upload" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></symbol>
+      <symbol id="i-reset" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></symbol>
       <symbol id="i-flame" viewBox="0 0 24 24"><path d="M12 22c4 0 7-2.7 7-6.8 0-3.6-2.5-6-4.2-8.2-.3 2-1.3 3.3-2.6 3.8.4-3.4-1.2-6.5-4-8.8C8.6 5.7 5 8.6 5 14.9 5 19.2 8 22 12 22z"/></symbol>
     </defs>
   </svg>
@@ -189,10 +204,12 @@
           </div>
         </div>
         <h3 id="player-title"></h3>
-        <p class="hook-by muted small" id="player-hook" hidden></p>
+        <p class="hook-by muted small"><span id="player-hook" hidden></span>
+          <button class="link" id="player-retitle" title="Write a new hook title (the AI if set up, else from chat). Only the title shown here changes; the video stays as it is.">New title</button></p>
         <div class="scores" id="player-scores"></div>
         <div class="player-actions">
-          <a class="button primary" id="player-dl" href="#"><svg class="i"><use href="#i-download"/></svg>Download</a>
+          <button class="primary" id="player-edit" title="Open in the editor: cut, add text, music, reframe, then export a new version. The original stays as it is."><svg class="i"><use href="#i-scissors"/></svg>Edit</button>
+          <a class="button" id="player-dl" href="#"><svg class="i"><use href="#i-download"/></svg>Download</a>
           <a class="button" id="player-dl-srt" href="#"><svg class="i"><use href="#i-captions"/></svg>Captions</a>
           <span class="spacer"></span>
           <button class="danger" id="player-delete"><svg class="i"><use href="#i-trash"/></svg><span>Delete</span></button>
@@ -209,35 +226,10 @@
           <button id="player-post-copy"><svg class="i"><use href="#i-copy"/></svg>Copy</button>
         </div>
 
-        <details class="editor" id="player-editor">
-          <summary><svg class="i"><use href="#i-scissors"/></svg>Edit clip <span class="editor-tag" id="editor-tag" hidden>not available</span></summary>
-          <p class="muted" id="editor-note"></p>
-          <div id="editor-body">
-          <div class="trim">
-            <button type="button" id="editor-source">Show the 1-minute source to trim</button>
-            <div class="trim-row">
-              <label>Start (s) <input type="number" id="editor-start" step="0.1" min="0"></label>
-              <button type="button" id="editor-set-start" hidden>Start here</button>
-              <label>End (s) <input type="number" id="editor-end" step="0.1" min="0"></label>
-              <button type="button" id="editor-set-end" hidden>End here</button>
-            </div>
-          </div>
-          <div class="settings-grid">
-            <label>Layout <select id="editor-layout" data-options="layouts"></select>
-              <small id="editor-facecam-row">Facecam: <span id="editor-facecam-label">not set</span>
-                · <button type="button" class="link" id="editor-facecam">Draw…</button></small></label>
-            <label>Caption style <select id="editor-template" data-options="templates"></select></label>
-            <label>Hook title <input type="text" id="editor-title" maxlength="80" placeholder="(no title)"></label>
-            <label class="check"><input type="checkbox" id="editor-captions"> Burn captions in</label>
-            <label class="check"><input type="checkbox" id="editor-title-video"> Show the title in the video</label>
-          </div>
-          <div class="player-actions">
-            <button class="primary" id="editor-render">Re-render clip</button>
-            <button id="editor-retitle" title="Write a new hook title (the AI if set up, else from chat)">New AI title</button>
-          </div>
-          <p class="form-error" id="editor-error" role="alert"></p>
-          </div>
-        </details>
+        <div class="player-edits" id="player-edits" hidden>
+          <h4>Edited versions</h4>
+          <ul id="player-edits-list"></ul>
+        </div>
 
         <h4>Transcript</h4>
         <ol class="transcript" id="player-transcript"></ol>
@@ -292,6 +284,90 @@
     <input type="hidden" name="facecam">
   </template>
 
+  <!-- ============ EDITOR (editor.js) ============ -->
+  <section class="ed" id="editor" hidden aria-label="Clip editor">
+    <header class="ed-top">
+      <button class="icon-btn" id="ed-back" title="Back to the clip (Esc)" aria-label="Close the editor"><svg class="i"><use href="#i-back"/></svg></button>
+      <div class="ed-title"><strong id="ed-name">Editor</strong><span class="ed-status" id="ed-status"></span></div>
+      <div class="ed-history">
+        <button class="icon-btn" id="ed-undo" title="Undo (Ctrl+Z)" aria-label="Undo"><svg class="i"><use href="#i-undo"/></svg></button>
+        <button class="icon-btn" id="ed-redo" title="Redo (Ctrl+Shift+Z)" aria-label="Redo"><svg class="i"><use href="#i-redo"/></svg></button>
+      </div>
+      <label class="ed-aspect" title="Video size"><svg class="i"><use href="#i-aspect"/></svg>
+        <select id="ed-aspect" aria-label="Video size">
+          <option value="9:16">9:16 · Reels / Shorts</option>
+          <option value="4:5">4:5 · Instagram feed</option>
+          <option value="1:1">1:1 · Square</option>
+        </select></label>
+      <button class="primary" id="ed-export"><svg class="i"><use href="#i-download"/></svg>Export</button>
+    </header>
+    <p class="ed-small-note">The editor works best on a computer: on a phone, use it in landscape.</p>
+    <div class="ed-body">
+      <nav class="ed-rail" id="ed-rail" role="tablist" aria-label="Editor tools">
+        <button role="tab" data-tab="media" aria-selected="true"><svg class="i"><use href="#i-film"/></svg><span>Media</span></button>
+        <button role="tab" data-tab="text" aria-selected="false"><svg class="i"><use href="#i-type"/></svg><span>Text</span></button>
+        <button role="tab" data-tab="captions" aria-selected="false"><svg class="i"><use href="#i-captions"/></svg><span>Captions</span></button>
+        <button role="tab" data-tab="frame" aria-selected="false"><svg class="i"><use href="#i-aspect"/></svg><span>Frame</span></button>
+        <button role="tab" data-tab="audio" aria-selected="false"><svg class="i"><use href="#i-music"/></svg><span>Audio</span></button>
+        <button role="tab" data-tab="exports" aria-selected="false"><svg class="i"><use href="#i-download"/></svg><span>Exports</span></button>
+      </nav>
+      <aside class="ed-panel" id="ed-panel"></aside>
+      <div class="ed-stage">
+        <div class="ed-viewport" id="ed-viewport">
+          <div class="ed-frame" id="ed-frame">
+            <canvas id="ed-canvas"></canvas>
+            <div class="ed-overlays" id="ed-overlays"></div>
+          </div>
+        </div>
+        <div class="ed-transport">
+          <button class="icon-btn" id="ed-tostart" title="Go to the start (Home)" aria-label="Go to the start"><svg class="i"><use href="#i-skip"/></svg></button>
+          <button class="ed-play" id="ed-play" title="Play / pause (Space)" aria-label="Play"><svg class="i fill"><use href="#i-play"/></svg></button>
+          <span class="ed-time"><b id="ed-now">0:00.0</b> / <span id="ed-total">0:00.0</span></span>
+        </div>
+      </div>
+      <aside class="ed-props" id="ed-props"></aside>
+    </div>
+    <div class="ed-timeline">
+      <div class="ed-tl-bar">
+        <button id="ed-split" title="Split at the playhead (S)"><svg class="i"><use href="#i-scissors"/></svg>Split</button>
+        <button id="ed-delete" title="Delete the selected item (Del)"><svg class="i"><use href="#i-trash"/></svg>Delete</button>
+        <button id="ed-add-text" title="Add text at the playhead (T)"><svg class="i"><use href="#i-type"/></svg>Text</button>
+        <span class="spacer"></span>
+        <span class="ed-zoom"><svg class="i"><use href="#i-zoomout"/></svg>
+          <input type="range" id="ed-zoom" min="0" max="100" value="0" aria-label="Timeline zoom">
+          <svg class="i"><use href="#i-zoomin"/></svg></span>
+      </div>
+      <div class="ed-tracks">
+        <div class="ed-labels" aria-hidden="true">
+          <div class="ed-lab ruler"></div>
+          <div class="ed-lab v"><svg class="i"><use href="#i-film"/></svg>Video</div>
+          <div class="ed-lab t"><svg class="i"><use href="#i-type"/></svg>Text</div>
+          <div class="ed-lab m"><svg class="i"><use href="#i-music"/></svg>Music</div>
+          <div class="ed-lab w">Sound</div>
+        </div>
+        <div class="ed-scroll" id="ed-scroll">
+          <div class="ed-inner" id="ed-inner">
+            <div class="ed-ruler" id="ed-ruler"></div>
+            <div class="ed-lane v" id="ed-lane-video"></div>
+            <div class="ed-lane t" id="ed-lane-text"></div>
+            <div class="ed-lane m" id="ed-lane-music"></div>
+            <canvas class="ed-lane w" id="ed-wave"></canvas>
+            <div class="ed-playhead" id="ed-playhead"><i></i></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <video id="ed-video" playsinline preload="auto" hidden></video>
+    <div class="ed-dlg" id="ed-dlg" hidden>
+      <div class="ed-dlg-card" role="dialog" aria-modal="true" aria-labelledby="ed-dlg-title">
+        <h3 id="ed-dlg-title">Exporting…</h3>
+        <div class="ed-progress"><i id="ed-dlg-bar"></i></div>
+        <p class="muted small" id="ed-dlg-text"></p>
+        <div class="player-actions" id="ed-dlg-actions"></div>
+      </div>
+    </div>
+  </section>
+
   <!-- ============ FACECAM PICKER ============ -->
   <div class="modal" id="facecam" hidden>
     <div class="modal-backdrop" data-close></div>
@@ -313,5 +389,6 @@
   </div>
 
   <script src="/static/app.js"></script>
+  <script src="/static/editor.js"></script>
 </body>
 </html>

@@ -13,8 +13,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from .config import (CLIP_DIR, HOME, META_DIR, SOURCE_DIR, THUMB_DIR, WORK_DIR, channel_of, clip_file,
-                     env_int, meta_path_for)
+from .config import (CACHE_DIR, CLIP_DIR, HOME, META_DIR, SOURCE_DIR, THUMB_DIR, WORK_DIR, channel_of, clip_file,
+                     env_int, meta_path_for, project_path_for)
 
 DAY = 86400
 DEFAULT_KEEP_SOURCES_DAYS = 7
@@ -47,9 +47,16 @@ def _read_meta(path: Path) -> dict | None:
 
 
 def clip_files(name: str, channel: str | None = None) -> tuple[Path, ...]:
-    """Every file that belongs to one clip: the clip, its captions, thumbnail, source and job."""
+    """Every file that belongs to one clip: the clip, its captions, thumbnail, source and job, plus
+    its editor project, timeline cache and exported edits."""
     p = clip_file(name, channel)
-    return (p, p.with_suffix(".srt"), THUMB_DIR / (p.stem + ".jpg"), SOURCE_DIR / name, meta_path_for(name))
+    extra: list[Path] = [project_path_for(name)]
+    if CACHE_DIR.is_dir():
+        extra += CACHE_DIR.glob(f"{p.stem}.*")
+    edits = p.parent / "edits"
+    if edits.is_dir():
+        extra += edits.glob(f"{p.stem}_edit-*.mp4")
+    return (p, p.with_suffix(".srt"), THUMB_DIR / (p.stem + ".jpg"), SOURCE_DIR / name, meta_path_for(name), *extra)
 
 
 # --------------------------------------------------------------------------- one folder per streamer
@@ -173,6 +180,11 @@ def usage() -> dict:
         row = per_channel.setdefault(p.parent.name, {"clips": 0, "bytes": 0})
         row["clips"] += 1
         row["bytes"] += size
+    for p in CLIP_DIR.glob("*/edits/*.mp4") if CLIP_DIR.is_dir() else []:   # exported edits count too
+        try:
+            per_channel.setdefault(p.parent.parent.name, {"clips": 0, "bytes": 0})["bytes"] += p.stat().st_size
+        except OSError:
+            pass
     sources = 0
     if SOURCE_DIR.is_dir():
         for s in SOURCE_DIR.glob("*.mp4"):

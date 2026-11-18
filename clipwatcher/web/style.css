@@ -148,12 +148,12 @@ button.link:hover { background: none; text-decoration: underline; }
 .input-icon input { flex: 1; min-width: 0; border: 0; background: none; padding-left: 0; box-shadow: none !important; }
 .add-row button.primary { padding: 10px 18px; }
 .settings { margin-top: 14px; }
-.settings summary, .editor summary { cursor: pointer; color: var(--muted); font-weight: 600; font-size: 14px; width: max-content;
+.settings summary { cursor: pointer; color: var(--muted); font-weight: 600; font-size: 14px; width: max-content;
   display: flex; align-items: center; gap: 7px; list-style: none; }
-.settings summary::-webkit-details-marker, .editor summary::-webkit-details-marker { display: none; }
-.settings summary::after, .editor summary::after { content: ""; width: 6px; height: 6px; border: solid currentColor;
+.settings summary::-webkit-details-marker { display: none; }
+.settings summary::after { content: ""; width: 6px; height: 6px; border: solid currentColor;
   border-width: 0 2px 2px 0; transform: rotate(45deg) translateY(-2px); margin-left: 2px; transition: transform .15s; }
-.settings[open] summary::after, .editor[open] summary::after { transform: rotate(-135deg) translateY(-1px); }
+.settings[open] summary::after { transform: rotate(-135deg) translateY(-1px); }
 .settings summary:hover { color: var(--text); }
 .settings-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px 18px; margin-top: 14px; }
 .settings-grid label { display: flex; flex-direction: column; gap: 5px; font-size: 13px; font-weight: 600; min-width: 0; }
@@ -327,15 +327,6 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
 .post { margin-top: 16px; padding: 14px; border-radius: 12px; background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent); }
 .post h4 { margin: 0 0 6px; color: var(--accent); }
 .post p { margin: 0 0 10px; white-space: pre-wrap; }
-.editor { margin-top: 18px; border-top: 1px solid var(--border); padding-top: 14px; }
-.editor summary { color: var(--text); font-weight: 700; }
-.editor-tag { font-size: 11.5px; font-weight: 600; color: var(--muted); padding: 1px 8px; border-radius: 20px; background: var(--panel-2); }
-.editor .settings-grid { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); margin-top: 12px; }
-.editor input[type="text"] { width: 100%; }
-.trim { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
-.trim-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
-.trim-row label { display: flex; flex-direction: column; font-size: 13px; font-weight: 600; gap: 4px; }
-.trim-row input { width: 96px; }
 .transcript { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 2px; }
 .transcript button {
   width: 100%; text-align: left; border: 0; background: none; padding: 7px 9px; border-radius: 9px;

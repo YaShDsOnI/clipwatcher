@@ -27,11 +27,11 @@ from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
 # only paths, constants and the job format here: recording and the AI run in their own processes
-from . import ai, avatars, components, storage
+from . import ai, avatars, components, editor, storage
 from .captions import TEMPLATES as CAPTION_TEMPLATES
-from .captions import Word
-from .clipper import media_duration, save_meta
-from .config import (CLIP_DIR, CLIP_NAME_RE, HOME, LOG_DIR, META_DIR, RUN_DIR, SOURCE_DIR, STREAMERS_FILE,
+from .captions import FONT_FILE, Word
+from .clipper import save_meta
+from .config import (CLIP_DIR, CLIP_NAME_RE, FONT_DIR, HOME, LOG_DIR, META_DIR, RUN_DIR, SOURCE_DIR, STREAMERS_FILE,
                      THUMB_DIR, WEB_DIR, channel_of, child_env, clip_file, is_plain_name, log, meta_path_for,
                      read_env_file, self_cmd, write_env)
 
@@ -385,7 +385,9 @@ def clip_info(name: str, meta: dict | None) -> dict:
         "time": when.isoformat(timespec="seconds"),
         "size": st.st_size if st else 0, "version": int(st.st_mtime) if st else 0,
         "ready": st is not None, "has_srt": srt.exists(), "text": srt_text(srt),
-        "status": "done" if st else "queued", "editable": False,
+        "status": "done" if st else "queued",
+        "editable": st is not None,             # the editor can always work from the finished clip
+        "has_source": False, "edits": editor.exports_for(name, channel) if st else [],
     }
     if meta:
         source = HOME / meta.get("source", "")
@@ -397,7 +399,7 @@ def clip_info(name: str, meta: dict | None) -> dict:
             "scores": ai.get("scores"), "virality": ai.get("virality"), "post": ai.get("post"),
             "title_by": ai.get("by") or ("chat" if meta.get("title") else None),
             "settings": meta.get("settings"), "start": meta.get("start"), "end": meta.get("end"),
-            "editable": source.is_file(),
+            "has_source": source.is_file(),
         })
     return info
 
@@ -427,12 +429,12 @@ def source_path(name: str) -> Path | None:
     return p if p.is_file() else None
 
 
-_rendering: set[str] = set()
+EXPORTS = editor.ExportQueue()
 
 
 def is_rendering() -> bool:
-    """Is any clip being processed right now (by a recorder or a re-render)?"""
-    if _rendering:
+    """Is any clip being processed right now (by a recorder, or an export from the editor)?"""
+    if any(j["status"] in ("queued", "running") for j in EXPORTS.jobs.values()):
         return True
     if META_DIR.exists():
         for mp in META_DIR.glob("*.json"):
@@ -444,64 +446,62 @@ def is_rendering() -> bool:
     return False
 
 
-def start_rerender(name: str, changes: dict) -> dict:
-    """Apply edits to a clip's job and re-render it in a background, low-priority process."""
+# --------------------------------------------------------------------------- editor
+# The editor never writes to the original clip: edits are exported as new files (see editor.py).
+
+def editor_state(name: str) -> dict:
+    """Everything the editor page needs to open one clip."""
     meta = read_meta(name)
-    source = source_path(name)
-    if meta is None or source is None:
-        raise ValueError("This clip has no saved source (it was made before editing existed).")
-    if name in _rendering or meta.get("status") in ("queued", "rendering"):
-        raise ValueError("This clip is already being rendered.")
-    dur = media_duration(source)
-    s = meta.setdefault("settings", {})
-    try:
-        start = float(changes.get("start", meta["start"]))
-        end = float(changes.get("end", meta["end"]))
-    except (TypeError, ValueError):
-        raise ValueError("Start and end must be numbers of seconds.") from None
-    start, end = max(0.0, start), min(dur, end)
-    if end - start < 3:
-        raise ValueError("A clip must be at least 3 seconds long.")
-    if end - start > 120:
-        raise ValueError("A clip can be at most 2 minutes long.")
-    meta["start"], meta["end"] = round(start, 2), round(end, 2)
-    if changes.get("layout") in LAYOUTS:
-        s["layout"] = changes["layout"]
-    if changes.get("template") in TEMPLATES:
-        s["template"] = changes["template"]
-    if isinstance(changes.get("captions"), bool):
-        s["captions"] = changes["captions"]
-    if isinstance(changes.get("title_in_video"), bool):
-        s["title_in_video"] = changes["title_in_video"]
-    if "facecam" in changes:
-        s["facecam"] = clean_facecam(changes["facecam"])
-    if s.get("layout") == "split" and not s.get("facecam"):
-        raise ValueError("Draw the facecam box first (split layout).")
-    if "title" in changes:                # the text as typed: shown as is, empty = no title
-        meta["title"] = (str(changes["title"]).strip()[:80] or None)
-        s["title"] = "custom"
-    retitle = bool(changes.get("retitle"))
-    if retitle:
-        s["title"] = "auto"
-    meta["status"] = "queued"
-    save_meta(meta_path_for(name), meta)
-    _rendering.add(name)
-
-    def run():
-        cmd = self_cmd("render", str(meta_path_for(name)))
-        if retitle:
-            cmd.append("--retitle")
-        kw = {"creationflags": 0x00004000 | subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
+    channel = channel_for(name, meta)
+    media = editor.media_for(name, meta)
+    if not media["clip"] and not media["source"]:
+        raise KeyError(name)
+    lib = editor.music_library()
+    saved = editor.load_project(name)
+    if saved is not None:
         try:
-            res = subprocess.run(cmd, cwd=HOME, capture_output=True, text=True, encoding="utf-8",
-                                 errors="replace", env=child_env(), **kw)
-            for line in res.stdout.strip().splitlines()[-3:]:
-                log(f"re-render: {line}")
-        finally:
-            _rendering.discard(name)
+            saved = editor.clean_project(saved, media, lib)
+        except ValueError:          # e.g. it was cut from a source that has since been deleted
+            saved = None
+    return {
+        "name": name, "channel": channel, "title": (meta or {}).get("title"),
+        "media": {k: {kk: vv for kk, vv in v.items() if kk != "path"} if v else None for k, v in media.items()},
+        "defaults": {k: editor.default_project(k, meta, v) for k, v in media.items() if v},
+        "project": saved,
+        "words": (meta or {}).get("words", []) if media["source"] else [],
+        "exports": editor.exports_for(name, channel),
+        "templates": TEMPLATES, "aspects": list(editor.ASPECTS), "speeds": list(editor.SPEEDS),
+        "music": [{"id": k, **v} for k, v in lib.items()],
+    }
 
-    threading.Thread(target=run, daemon=True).start()
-    log(f"re-rendering {name}")
+
+def editor_project(name: str, raw: dict) -> tuple[dict, dict | None]:
+    """Check and save a project sent by the editor. Returns (project, meta)."""
+    meta = read_meta(name)
+    media = editor.media_for(name, meta)
+    project = editor.clean_project(raw, media, editor.music_library())
+    editor.save_project(name, project)
+    return project, meta
+
+
+def retitle(name: str) -> dict:
+    """A new hook title from the AI (or from chat). Only the title shown in the dashboard changes:
+    the video itself is never re-rendered. Burn a title in with the editor's text layers."""
+    meta = read_meta(name)
+    if meta is None:
+        raise ValueError("No chat or transcript was saved for this clip, so a new title can't be written.")
+    words = [Word(**w) for w in meta.get("words", [])]
+    result, cfg = None, ai.ai_config()
+    if cfg:
+        try:
+            result = ai.ai_rate(meta, words, cfg)
+        except Exception as e:  # AI unavailable, quota, network: fall back to chat
+            log(f"titles: {cfg['provider']} not used ({e}); title from chat instead")
+    if result:
+        meta["title"], meta["ai"] = result["title"], result
+    else:
+        meta["title"] = ai.chat_title(meta.get("chat", []))
+    save_meta(meta_path_for(name), meta)
     return clip_info(name, meta)
 
 
@@ -928,6 +928,49 @@ class Handler(BaseHTTPRequestHandler):
             if p is None:
                 return self.send_error_json(HTTPStatus.NOT_FOUND, "no source for this clip")
             return self.send_file(p, "video/mp4")
+        if path == "/fonts/" + FONT_FILE:                    # the caption font, for the editor's preview
+            return self.send_file(FONT_DIR / FONT_FILE, "font/ttf", cache="max-age=604800")
+        # ---- editor
+        if m := re.fullmatch(r"/api/clips/([\w.-]+\.mp4)/editor", path):
+            if not is_plain_name(m.group(1)):
+                return self.send_error_json(HTTPStatus.NOT_FOUND, "no such clip")
+            try:
+                return self.send_json(editor_state(m.group(1)))
+            except KeyError:
+                return self.send_error_json(HTTPStatus.NOT_FOUND, "This clip's video is gone.")
+        if m := re.fullmatch(r"/media/([\w.-]+\.mp4)/(source|clip)", path):
+            media = editor.media_for(m.group(1), read_meta(m.group(1))).get(m.group(2)) if is_plain_name(m.group(1)) else None
+            if media is None:
+                return self.send_error_json(HTTPStatus.NOT_FOUND, "no such video")
+            return self.send_file(media["path"], "video/mp4")
+        if m := re.fullmatch(r"/api/clips/([\w.-]+\.mp4)/(filmstrip|waveform)/(source|clip)", path):
+            name, what, kind = m.groups()
+            media = editor.media_for(name, read_meta(name)).get(kind) if is_plain_name(name) else None
+            if media is None:
+                return self.send_error_json(HTTPStatus.NOT_FOUND, "no such video")
+            if what == "waveform":
+                return self.send_json(editor.waveform(media, Path(name).stem, kind))
+            strip = editor.filmstrip(media, Path(name).stem, kind)
+            if strip is None:
+                return self.send_error_json(HTTPStatus.NOT_FOUND, "no filmstrip")
+            return self.send_file(strip, "image/jpeg", cache="max-age=3600")
+        if m := re.fullmatch(r"/api/exports/(\w{1,20})", path):
+            job = EXPORTS.jobs.get(m.group(1))
+            if job is None:
+                return self.send_error_json(HTTPStatus.NOT_FOUND, "no such export")
+            return self.send_json(job)
+        if m := re.fullmatch(r"/edits/(\w{1,25})/([\w.-]+)", path):
+            p = editor.edit_path(m.group(1), m.group(2))
+            if p is None:
+                return self.send_error_json(HTTPStatus.NOT_FOUND, "no such edit")
+            return self.send_file(p, "video/mp4", download="download" in (url.query or ""))
+        if path == "/api/music":
+            return self.send_json({"music": [{"id": k, **v} for k, v in editor.music_library().items()]})
+        if m := re.fullmatch(r"/music/([\w.]+)", path):
+            p = editor.music_path(m.group(1))
+            if p is None:
+                return self.send_error_json(HTTPStatus.NOT_FOUND, "no such sound")
+            return self.send_file(p, cache="max-age=86400")
         if path == "/api/clips":
             return self.send_json({"clips": list_clips()})
         if path.startswith("/api/clips/") and path.endswith("/transcript"):
@@ -951,6 +994,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = unquote(urlparse(self.path).path)
+        if path == "/api/music":                     # raw file upload: read before any JSON parsing
+            return self.upload_music()
         body = self.read_json()
         try:
             if path == "/api/streamers":
@@ -973,10 +1018,16 @@ class Handler(BaseHTTPRequestHandler):
                 write_env({"WHISPER_MODEL": size})
                 log(f"caption model set to {size}")
                 return self.send_json(setup_state())
-            if m := re.fullmatch(r"/api/clips/([\w.-]+\.mp4)/render", path):
-                if clip_path(m.group(1)) is None and read_meta(m.group(1)) is None:
+            if m := re.fullmatch(r"/api/clips/([\w.-]+\.mp4)/(project|export|retitle)", path):
+                name, what = m.groups()
+                if not is_plain_name(name) or clip_path(name) is None and read_meta(name) is None:
                     return self.send_error_json(HTTPStatus.NOT_FOUND, "no such clip")
-                return self.send_json(start_rerender(m.group(1), body))
+                if what == "retitle":
+                    return self.send_json(retitle(name))
+                project, meta = editor_project(name, body)
+                if what == "project":
+                    return self.send_json({"project": project})
+                return self.send_json({"project": project, "job": EXPORTS.submit(name, meta, project)})
             m = re.fullmatch(r"/api/streamers/(\w+)/(start|stop|settings|clip)", path)
             if m:
                 w = self.manager.get(m.group(1))
@@ -995,9 +1046,37 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_error_json(HTTPStatus.BAD_REQUEST, str(e))
         self.send_error_json(HTTPStatus.NOT_FOUND, "not found")
 
+    def upload_music(self):
+        """A music / sound file from the editor: raw bytes, file name in X-Filename."""
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            n = 0
+        if not 0 < n <= editor.MAX_MUSIC_BYTES:
+            self.close_connection = True
+            return self.send_error_json(HTTPStatus.REQUEST_ENTITY_TOO_LARGE if n else HTTPStatus.BAD_REQUEST,
+                                        f"Choose an audio file under {editor.MAX_MUSIC_BYTES // 1_000_000} MB.")
+        data = self.rfile.read(n)
+        try:
+            item = editor.add_music(data, unquote(self.headers.get("X-Filename") or "sound.mp3"))
+        except ValueError as e:
+            return self.send_error_json(HTTPStatus.BAD_REQUEST, str(e))
+        log(f"editor: added sound {item['name']}")
+        return self.send_json(item)
+
     def do_DELETE(self):
         path = unquote(urlparse(self.path).path)
         try:
+            if m := re.fullmatch(r"/api/edits/(\w{1,25})/([\w.-]+)", path):
+                p = editor.edit_path(m.group(1), m.group(2))
+                if p is None:
+                    return self.send_error_json(HTTPStatus.NOT_FOUND, "no such edit")
+                unlink_retry(p)
+                log(f"deleted edit {p.name}")
+                return self.send_json({"ok": True})
+            if m := re.fullmatch(r"/api/music/([\w.]+)", path):
+                editor.delete_music(m.group(1))
+                return self.send_json({"ok": True})
             if m := re.fullmatch(r"/api/streamers/(\w+)", path):
                 self.manager.remove(m.group(1))
                 return self.send_json({"ok": True})
@@ -1005,8 +1084,8 @@ class Handler(BaseHTTPRequestHandler):
                 name = path[len("/api/clips/"):]
                 if not is_plain_name(name):
                     return self.send_error_json(HTTPStatus.NOT_FOUND, "no such clip")
-                if name in _rendering:
-                    raise ValueError("Wait until this clip has finished rendering.")
+                if any(j["clip"] == name and j["status"] in ("queued", "running") for j in EXPORTS.jobs.values()):
+                    raise ValueError("Wait until this clip's export has finished.")
                 files = storage.clip_files(name, channel_for(name))
                 if not any(f.exists() for f in files):
                     return self.send_error_json(HTTPStatus.NOT_FOUND, "no such clip")

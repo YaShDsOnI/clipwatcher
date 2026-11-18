@@ -672,7 +672,7 @@ async function openPlayer(name) {
   const post = c.post ? `${c.post.caption}\n${(c.post.hashtags || []).join(" ")}` : "";
   $("#player-post").hidden = !post;
   $("#player-post-text").textContent = post;
-  fillEditor(c);
+  renderEdits(c);
   $("#player-dl").href = `${src}?download=1`;
   $("#player-dl-srt").href = `/clips/${encodeURIComponent(name.replace(/\.mp4$/, ".srt"))}?download=1`;
   $("#player-dl-srt").hidden = !c.has_srt;
@@ -714,8 +714,12 @@ $("#player").addEventListener("click", (e) => {
 });
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
-  if (!$("#facecam").hidden) $("#facecam").hidden = true;      // the picker sits on top of the player
-  else if (!$("#player").hidden) closePlayer();
+  if (!$("#facecam").hidden) {                 // the picker sits on top of the player and the editor
+    $("#facecam").hidden = true;
+    e.stopImmediatePropagation();
+  } else if (window.editorIsOpen?.()) {
+    // the editor handles Escape itself (editor.js)
+  } else if (!$("#player").hidden) closePlayer();
 });
 $("#player-path-copy").addEventListener("click", async () => {
   const c = state.player;
@@ -751,79 +755,59 @@ $("#player-delete").addEventListener("click", async (e) => {
   refreshClips();
 });
 
-// ------------------------------------------------------------------ clip editor
+// ------------------------------------------------------------------ editing (the editor itself is editor.js)
 
-function fillEditor(c) {
-  // always shown, so it's clear why a clip can't be edited instead of the option silently vanishing
-  $("#editor-body").hidden = !c.editable;
-  $("#editor-tag").hidden = !!c.editable;
-  if (!c.editable) {
-    $("#editor-note").textContent = c.status === "queued" || c.status === "rendering"
-      ? "Available once this clip has finished rendering."
-      : "This clip can't be trimmed or restyled any more: its 1-minute source video is gone. Every clip keeps " +
-        "its source for as many days as Setup → Storage says (0 = forever); you can still download it.";
-    return;
-  }
-  const s = c.settings || {};
-  $("#editor-start").value = c.start;
-  $("#editor-end").value = c.end;
-  $("#editor-layout").value = s.layout || "blur";
-  $("#editor-template").value = s.template || "karaoke";
-  $("#editor-captions").checked = s.captions !== false;
-  $("#editor-title-video").checked = !!s.title_in_video;
-  $("#editor-title").value = c.title || "";
-  state.editFacecam = s.facecam || null;
-  $("#editor-facecam-label").textContent = facecamText(state.editFacecam);
-  $("#editor-facecam-row").hidden = $("#editor-layout").value !== "split";
-  $("#editor-error").textContent = "";
-  $("#editor-note").textContent = `Trim within the saved 1-minute source: the clip runs ${c.start}s to ${c.end}s of it.`;
-  $("#editor-source").textContent = "Show the 1-minute source to trim";
-  $("#editor-set-start").hidden = $("#editor-set-end").hidden = true;
+// edited versions of the open clip: new files next to the clip; the original is never changed
+function renderEdits(c) {
+  const list = c.edits || [];
+  $("#player-edits").hidden = !list.length;
+  $("#player-edits-list").innerHTML = list.map((x) =>
+    `<li><span class="grow"><b>Edit</b> · ${esc(ago(x.time))}<br><span class="muted small">${sizeMB(x.size)}</span></span>` +
+    `<a class="button" href="${esc(x.url)}" target="_blank" rel="noopener" title="Watch">${icon("play", "fill")}</a>` +
+    `<a class="button" href="${esc(x.url)}?download=1" title="Download">${icon("download")}</a>` +
+    `<button class="danger" data-del-edit="${esc(x.file)}" title="Delete this edited version">${icon("trash")}</button></li>`).join("");
 }
-
-$("#editor-layout").addEventListener("change", () => {
-  $("#editor-facecam-row").hidden = $("#editor-layout").value !== "split";
-});
-$("#editor-facecam").addEventListener("click", () => {
-  openFacecam(state.player?.channel, state.editFacecam, (box) => {
-    state.editFacecam = box;
-    $("#editor-facecam-label").textContent = facecamText(box);
-  });
-});
-$("#editor-source").addEventListener("click", () => {
-  const c = state.player, v = $("#player-video");
-  if (!c) return;
-  state.showingSource = !state.showingSource;
-  v.src = state.showingSource ? `/sources/${encodeURIComponent(c.name)}` : `/clips/${encodeURIComponent(c.name)}?v=${c.version}`;
-  if (state.showingSource) v.addEventListener("loadedmetadata", () => { v.currentTime = Number($("#editor-start").value) || 0; }, { once: true });
-  $("#editor-source").textContent = state.showingSource ? "Back to the finished clip" : "Show the 1-minute source to trim";
-  $("#editor-set-start").hidden = $("#editor-set-end").hidden = !state.showingSource;
-  v.play().catch(() => {});
-});
-$("#editor-set-start").addEventListener("click", () => { $("#editor-start").value = $("#player-video").currentTime.toFixed(1); });
-$("#editor-set-end").addEventListener("click", () => { $("#editor-end").value = $("#player-video").currentTime.toFixed(1); });
-
-async function rerender(body) {
+$("#player-edit").addEventListener("click", () => {
   const c = state.player;
   if (!c) return;
-  $("#editor-error").textContent = "";
+  if (!c.editable) { toast("This clip is still being made: try again in a moment."); return; }
+  $("#player-video").pause();
+  openEditor(c.name);
+});
+$("#player-edits-list").addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-del-edit]");
+  if (!btn || !state.player) return;
+  if (!btn.classList.contains("confirm")) { btn.classList.add("confirm"); toast("Click the bin again to delete this edited version"); return; }
   try {
-    await api("POST", `/api/clips/${encodeURIComponent(c.name)}/render`, body);
-    closePlayer();
-    toast("Re-rendering… the clip updates here in a few seconds.");
-    refreshClips();
-  } catch (ex) {
-    $("#editor-error").textContent = ex.message;
-  }
-}
-$("#editor-render").addEventListener("click", () => rerender({
-  start: Number($("#editor-start").value), end: Number($("#editor-end").value),
-  layout: $("#editor-layout").value, template: $("#editor-template").value,
-  captions: $("#editor-captions").checked, title: $("#editor-title").value,
-  title_in_video: $("#editor-title-video").checked,
-  facecam: state.editFacecam,
-}));
-$("#editor-retitle").addEventListener("click", () => rerender({ retitle: true }));
+    await api("DELETE", `/api/edits/${encodeURIComponent(state.player.channel)}/${encodeURIComponent(btn.dataset.delEdit)}`);
+    state.player.edits = state.player.edits.filter((x) => x.file !== btn.dataset.delEdit);
+    renderEdits(state.player);
+    toast("Edited version deleted");
+  } catch (ex) { toast(ex.message); }
+});
+window.addEventListener("editor-closed", async (e) => {
+  await refreshClips();
+  const c = state.clips.find((x) => x.name === e.detail.name);
+  if (c && state.player?.name === c.name) { state.player = c; renderEdits(c); }
+});
+$("#player-retitle").addEventListener("click", async () => {
+  const c = state.player, btn = $("#player-retitle");
+  if (!c) return;
+  btn.disabled = true;
+  btn.textContent = "Writing…";
+  try {
+    const info = await api("POST", `/api/clips/${encodeURIComponent(c.name)}/retitle`);
+    Object.assign(c, info);
+    $("#player-title").textContent = c.title || `${c.channel} clip`;
+    $("#player-title").classList.toggle("plain", !c.title);
+    $("#player-hook").hidden = !c.title_by;
+    $("#player-hook").textContent = c.title_by === "chat" ? "Hook title from what chat said" : c.title_by ? `Hook title written by ${c.title_by}` : "";
+    state.clipsKey = "";
+    renderClips();
+    toast("New title. To put it in the video, use Edit → Text → Hook title.");
+  } catch (ex) { toast(ex.message); }
+  finally { btn.disabled = false; btn.textContent = "New title"; }
+});
 
 $("#player-post-copy").addEventListener("click", async () => {
   try { await navigator.clipboard.writeText($("#player-post-text").textContent); toast("Copied"); }

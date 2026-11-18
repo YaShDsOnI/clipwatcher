@@ -5,6 +5,7 @@ run/
 logs/
 models/
 share/
+music/
 .env
 .env.*
 streamers.json
