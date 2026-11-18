@@ -79,6 +79,35 @@ function mmss(t) {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 function sizeMB(b) { return `${(b / 1e6).toFixed(1)} MB`; }
+const icon = (name, cls = "") => `<svg class="i ${cls}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
+// a stable colour per streamer, for their avatar
+const hue = (s) => [...String(s)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
+function dayLabel(iso) {
+  const d = new Date(iso), today = new Date();
+  const days = Math.round((new Date(today.toDateString()) - new Date(d.toDateString())) / 86400000);
+  if (days === 0) return "Today";
+  if (days === 1) return "Yesterday";
+  return d.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+}
+
+// ------------------------------------------------------------------ theme (auto / light / dark)
+
+const THEMES = ["auto", "light", "dark"];
+function applyTheme(t) {
+  if (t === "auto") delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = t;
+  $("#theme use").setAttribute("href", `#i-${t === "auto" ? "auto" : t === "light" ? "sun" : "moon"}`);
+  $("#theme").title = t === "auto" ? "Theme: automatic (follows your system)" : `Theme: ${t}`;
+  try { localStorage.setItem("cw-theme", t); } catch { /* private mode */ }
+}
+let theme = "auto";
+try { theme = localStorage.getItem("cw-theme") || "auto"; } catch { /* ignore */ }
+applyTheme(THEMES.includes(theme) ? theme : "auto");
+$("#theme").addEventListener("click", () => {
+  theme = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length];
+  applyTheme(theme);
+  toast(theme === "auto" ? "Theme follows your system" : `${theme[0].toUpperCase()}${theme.slice(1)} theme`);
+});
 
 // ------------------------------------------------------------------ tabs
 
@@ -95,6 +124,11 @@ function showView(view) {
   if (view === "setup") loadSetup();
 }
 document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => showView(b.dataset.view)));
+$(".brand").addEventListener("click", (e) => { e.preventDefault(); showView("streamers"); });
+// "⋯" menus close when you click anywhere else
+document.addEventListener("click", (e) => {
+  document.querySelectorAll("details.menu[open]").forEach((d) => { if (!d.contains(e.target)) d.open = false; });
+});
 
 // ------------------------------------------------------------------ settings form
 
@@ -150,17 +184,23 @@ function readSettings(container) {
   }
   return s;
 }
+// most telling first: the card shows the first few and folds the rest into "+N"
 function settingsChips(s) {
   const layout = { blur: "blurred layout", crop: "center crop", split: s.facecam ? "streamer split" : "split (no facecam box yet!)" };
-  const out = [`min ${s.min} msgs`, `${s.ratio}× usual chat`, s.quality === "best" ? "best quality" : s.quality,
-    layout[s.layout] || s.layout, `${(state.templates[s.template] || s.template || "").split(" (")[0]} captions`];
-  if (!s.captions) out[out.length - 1] = "no captions";
+  const out = [`${s.ratio}× usual chat`, layout[s.layout] || s.layout,
+    s.captions ? `${(state.templates[s.template] || s.template || "").split(" (")[0]} captions` : "no captions"];
+  if (s.max_per_hour) out.push(`max ${s.max_per_hour} clips/hour`);
+  out.push(`min ${s.min} msgs`, `${s.gap ?? 30} s between clips`, s.quality === "best" ? "best quality" : s.quality);
   if (s.captions && s.speakers) out.push("speaker colours");
   out.push(s.title === "off" ? "no hook title" : s.title === "chat" ? "titles from chat" : "auto titles");
   if (s.title !== "off" && s.title_in_video) out.push("title in video");
-  if (s.max_per_hour) out.push(`max ${s.max_per_hour} clips/hour`);
   if (s.keep_recordings) out.push("keeps recordings");
   return out;
+}
+function chipsHTML(list, shown = 3) {
+  const rest = list.slice(shown);
+  return list.slice(0, shown).map((c) => `<span class="chip">${esc(c)}</span>`).join("") +
+    (rest.length ? `<span class="chip more" title="${esc(rest.join(" · "))}">+${rest.length} more</span>` : "");
 }
 
 // ------------------------------------------------------------------ facecam picker
@@ -247,30 +287,42 @@ function makeCard(ch) {
   el.dataset.channel = ch;
   el.innerHTML = `
     <div class="streamer-head">
-      <h3>${esc(ch)}</h3>
-      <a class="ext" href="https://www.twitch.tv/${esc(ch)}" target="_blank" rel="noopener">twitch.tv/${esc(ch)} ↗</a>
+      <span class="avatar" style="--h:${hue(ch)}" aria-hidden="true">${esc(ch[0])}</span>
+      <div class="who">
+        <h3 title="${esc(ch)}">${esc(ch)}</h3>
+        <a class="ext" href="https://www.twitch.tv/${esc(ch)}" target="_blank" rel="noopener">twitch.tv/${esc(ch)}${icon("ext")}</a>
+      </div>
       <span class="status" data-status></span>
     </div>
-    <div class="activity">
+    <div class="activity" data-activity>
       <div class="activity-head"><span>Chat messages per 10 s</span><span data-now></span></div>
       <svg viewBox="0 0 360 64" preserveAspectRatio="none" role="img" aria-label="Chat activity" data-chart></svg>
       <div class="activity-note" data-activity-label></div>
     </div>
+    <div class="activity idle" data-idle hidden>
+      <div class="idle-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="idle-text" data-idle-text></div>
+    </div>
     <div class="stats">
-      <div class="stat"><b data-clips>0</b>clips this session</div>
-      <div class="stat"><b data-spikes>0</b>chat spikes</div>
+      <div class="stat"><b data-saved>0</b>clips saved</div>
+      <div class="stat"><b data-clips>0</b>this session</div>
       <div class="stat"><b data-uptime>–</b>running for</div>
     </div>
     <div class="chips" data-chips></div>
     <div class="actions">
-      <button data-act="start" class="primary">Start</button>
-      <button data-act="clipnow" class="primary" title="Clip the last 20 seconds and the next 10, right now">Clip now</button>
-      <button data-act="stop">Stop</button>
-      <button data-act="edit">Settings</button>
-      <button data-act="clips">View clips</button>
+      <button data-act="start" class="primary">${icon("play", "fill")}Start</button>
+      <button data-act="clipnow" class="primary" title="Clip the last 20 seconds and the next 10, right now">${icon("scissors")}Clip now</button>
+      <button data-act="stop">${icon("stop", "fill")}<span>Stop</span></button>
       <span class="spacer"></span>
-      <button data-act="log">Show log</button>
-      <button data-act="remove" class="danger">Remove</button>
+      <button class="icon-btn bordered" data-act="edit" title="Settings" aria-label="Settings for ${esc(ch)}">${icon("sliders")}</button>
+      <button class="icon-btn bordered" data-act="clips" title="${esc(ch)}'s clips" aria-label="Show ${esc(ch)}'s clips">${icon("film")}</button>
+      <details class="menu">
+        <summary aria-label="More actions" title="More">${icon("more")}</summary>
+        <div class="menu-list">
+          <button data-act="log">${icon("log")}<span>Show log</span></button>
+          <button data-act="remove" class="danger">${icon("trash")}<span>Remove streamer</span></button>
+        </div>
+      </details>
     </div>
     <div class="edit-settings" data-edit hidden>
       <div class="settings-grid" data-settings></div>
@@ -302,8 +354,12 @@ async function cardAction(ch, act, btn) {
     else if (act === "log") {
       const log = $("[data-log]", card);
       log.hidden = !log.hidden;
-      btn.textContent = log.hidden ? "Show log" : "Hide log";
-      if (!log.hidden) log.scrollTop = log.scrollHeight;
+      $("span", btn).textContent = log.hidden ? "Show log" : "Hide log";
+      btn.closest("details")?.removeAttribute("open");
+      if (!log.hidden) {
+        log.textContent = (state.streamers.find((w) => w.channel === ch)?.log || []).join("\n") || "No output yet.";
+        log.scrollTop = log.scrollHeight;
+      }
       return;
     } else if (act === "edit") {
       const s = state.streamers.find((w) => w.channel === ch);
@@ -325,8 +381,8 @@ async function cardAction(ch, act, btn) {
     } else if (act === "remove") {
       if (!btn.classList.contains("confirm")) {          // two-step confirm, no browser dialog
         btn.classList.add("confirm");
-        btn.textContent = "Click again to remove";
-        setTimeout(() => { btn.classList.remove("confirm"); btn.textContent = "Remove"; }, 4000);
+        $("span", btn).textContent = "Click again to remove";
+        setTimeout(() => { btn.classList.remove("confirm"); $("span", btn).textContent = "Remove streamer"; }, 4000);
         return;
       }
       await api("DELETE", `/api/streamers/${ch}`);
@@ -360,6 +416,18 @@ function updateCard(card, s) {
   const st = $("[data-status]", card);
   st.className = `status ${s.status}`;
   st.textContent = STATUS_LABEL[s.status] || s.status;
+  card.classList.toggle("is-live", s.status === "recording");
+
+  // stopped and nothing to show: say so, instead of an empty chart that promises data
+  const idle = !s.running && !s.buckets.length;
+  $("[data-activity]", card).hidden = idle;
+  $("[data-idle]", card).hidden = !idle;
+  if (idle) {
+    $("[data-idle-text]", card).innerHTML = s.status === "error"
+      ? `<b>Stopped with an error.</b> Open ⋯ → Show log to see why, then press Start.`
+      : `<b>Not recording.</b> Press Start: it waits for ${esc(s.channel)} to go live and starts by itself.`;
+  }
+  $("[data-saved]", card).textContent = state.savedByChannel?.get(s.channel) ?? 0;
 
   const last = s.buckets.at(-1);
   $("[data-chart]", card).innerHTML = chartSVG(s.buckets);
@@ -370,9 +438,9 @@ function updateCard(card, s) {
     : s.buckets.length ? "Last 6 minutes · purple bars were clipped · dashed line = usual level" : "";
 
   $("[data-clips]", card).textContent = s.clips_made;
-  $("[data-spikes]", card).textContent = s.spikes;
   $("[data-uptime]", card).textContent = s.started_at ? duration(Date.now() / 1000 - s.started_at) : "–";
-  $("[data-chips]", card).innerHTML = settingsChips(s.settings).map((c) => `<span class="chip">${esc(c)}</span>`).join("");
+  const chips = chipsHTML(settingsChips(s.settings));
+  if (card.dataset.chips !== chips) { $("[data-chips]", card).innerHTML = chips; card.dataset.chips = chips; }
 
   const running = s.running;
   $('[data-act="start"]', card).hidden = running;
@@ -385,7 +453,7 @@ function updateCard(card, s) {
   const stop = $('[data-act="stop"]', card);
   stop.hidden = !running;
   stop.disabled = s.status === "stopping";
-  stop.textContent = s.status === "stopping" ? "Stopping…" : "Stop";
+  $("span", stop).textContent = s.status === "stopping" ? "Stopping…" : "Stop";
   $('[data-act="edit"]', card).hidden = s.status === "stopping";
   $('[data-act="remove"]', card).hidden = running;
 
@@ -417,12 +485,18 @@ function renderStreamers() {
   const rec = state.streamers.filter((s) => s.status === "recording").length;
   const wait = state.streamers.filter((s) => s.running && s.status !== "recording").length;
   const parts = [];
-  if (rec) parts.push(`<span class="live-dot">● ${rec} recording</span>`);
-  if (wait) parts.push(`<span>${wait} waiting</span>`);
-  parts.push(state.rendering ? `<span title="AI models are loaded only while a clip is being made">AI: making a clip…</span>`
-    : `<span title="AI models are loaded only while a clip is being made">AI: idle (0 MB)</span>`);
-  if (state.diskFree != null) parts.push(`<span>${state.diskFree} GB free</span>`);
-  $("#summary").innerHTML = parts.join("");
+  if (rec) parts.push(`<span class="hpill live">${rec} recording</span>`);
+  if (wait) parts.push(`<span class="hpill warn">${wait} waiting for stream</span>`);
+  const aiTip = "AI models are loaded only while a clip is being made, then the memory is freed";
+  parts.push(state.rendering
+    ? `<span class="hpill busy" title="${aiTip}"><span class="mini-spin"></span>Making a clip</span>`
+    : `<span class="hpill optional" title="${aiTip}">${icon("cpu")}AI idle · 0 MB</span>`);
+  if (state.diskFree != null) {
+    const cls = state.diskFree < 3 ? " bad" : state.diskFree < 15 ? " warn" : " optional";
+    parts.push(`<span class="hpill${cls}" title="Free disk space">${icon("disk")}${state.diskFree} GB free</span>`);
+  }
+  const html = parts.join("");
+  if ($("#summary").innerHTML !== html) $("#summary").innerHTML = html;
 }
 
 async function refreshState() {
@@ -452,7 +526,7 @@ async function refreshState() {
     }
     renderStreamers();
   } catch {
-    $("#summary").innerHTML = `<span class="live-dot">Dashboard server not reachable. Is ./dashboard.sh still running?</span>`;
+    $("#summary").innerHTML = `<span class="hpill bad">Dashboard server not reachable: is clipwatcher still running?</span>`;
   }
 }
 
@@ -489,25 +563,44 @@ function renderClips() {
     return;
   }
   state.clipsKey = key;
-  $("#clips").innerHTML = clips.map((c) => {
-    const isNew = state.seen && !state.seen.has(c.name) && c.ready;
-    const line = c.title ? `<span class="title-line">${esc(c.title)}</span>`
-      : c.text ? `<span class="quote">“${esc(c.text.slice(0, 90))}”</span>` : "";
-    const busy = c.status === "queued" || c.status === "rendering";
-    const overlay = busy
-      ? `<span class="state"><span><span class="spinner"></span>${c.status === "queued" ? "Waiting its turn…" : "Adding captions…"}</span></span>`
-      : c.status === "failed" ? `<span class="state failed" title="${esc(c.error || "")}">Couldn't make this clip</span>` : "";
-    const thumb = c.ready ? `<img loading="lazy" src="/thumbs/${encodeURIComponent(c.name.replace(/\.mp4$/, ""))}.jpg?v=${c.version}" alt="">` : "";
-    const score = c.virality != null ? `Viral ${c.virality}` : c.hype != null ? `Hype ${c.hype}` : "";
-    return `<button class="clip" data-name="${esc(c.name)}" title="${esc(new Date(c.time).toLocaleString())}"${c.ready ? "" : " disabled"}>
-      ${thumb}
-      <span class="badge${isNew ? " new" : ""}">${isNew ? "NEW · " : ""}${c.msgs ? `${c.msgs} msgs` : "clip"}</span>
-      ${score ? `<span class="badge hype">${score}</span>` : ""}
-      <span class="play"></span>
-      <span class="meta"><strong>${esc(c.channel)}</strong><span data-ago="${esc(c.time)}">${ago(c.time)}</span>${line}</span>
-      ${overlay}
-    </button>`;
-  }).join("");
+  // newest first: grouped under Today / Yesterday / date headings. "Best first" is one ranked list.
+  const grouped = $("#clip-sort").value !== "best";
+  const perDay = new Map();
+  if (grouped) for (const c of clips) perDay.set(dayLabel(c.time), (perDay.get(dayLabel(c.time)) || 0) + 1);
+  let html = "", lastDay = null;
+  for (const c of clips) {
+    if (grouped) {
+      const day = dayLabel(c.time);
+      if (day !== lastDay) {
+        const n = perDay.get(day);
+        html += `<div class="clip-group"><h3>${esc(day)}</h3><span>${n} clip${n === 1 ? "" : "s"}</span></div>`;
+        lastDay = day;
+      }
+    }
+    html += clipCard(c);
+  }
+  $("#clips").innerHTML = html;
+}
+
+function clipCard(c) {
+  const isNew = state.seen && !state.seen.has(c.name) && c.ready;
+  const title = c.title ? `<span class="clip-title">${esc(c.title)}</span>`
+    : c.text ? `<span class="clip-title quote">“${esc(c.text.slice(0, 90))}”</span>` : "";
+  const busy = c.status === "queued" || c.status === "rendering";
+  const overlay = busy
+    ? `<span class="state"><span><span class="spinner"></span>${c.status === "queued" ? "Waiting its turn…" : "Adding captions…"}</span></span>`
+    : c.status === "failed" ? `<span class="state failed" title="${esc(c.error || "")}">Couldn't make this clip</span>` : "";
+  const thumb = c.ready ? `<img loading="lazy" src="/thumbs/${encodeURIComponent(c.name.replace(/\.mp4$/, ""))}.jpg?v=${c.version}" alt="">` : "";
+  const value = c.virality ?? c.hype;
+  const hot = value != null && value >= 70;
+  const score = value == null ? "" : `<span class="badge${hot ? " hot" : ""}" title="${c.virality != null ? "AI virality score" : "How hard chat reacted"}">${hot ? icon("flame", "fill") : ""}${c.virality != null ? "Viral" : "Hype"} ${value}</span>`;
+  return `<button class="clip" data-name="${esc(c.name)}" title="${esc(new Date(c.time).toLocaleString())}"${c.ready ? "" : " disabled"}>
+    ${thumb}
+    <span class="top">${isNew ? `<span class="badge new">NEW</span>` : "<span></span>"}${score}</span>
+    <span class="play">${icon("play", "fill")}</span>
+    <span class="meta">${title}<span class="clip-sub"><b>${esc(c.channel)}</b> · <span data-ago="${esc(c.time)}">${ago(c.time)}</span>${c.msgs ? ` · ${c.msgs} msgs` : ""}</span></span>
+    ${overlay}
+  </button>`;
 }
 
 async function refreshClips() {
@@ -518,7 +611,10 @@ async function refreshClips() {
       state.seen = new Set(state.clips.map((c) => c.name));
       saveSeen();
     }
+    state.savedByChannel = new Map();
+    for (const c of state.clips) if (c.ready) state.savedByChannel.set(c.channel, (state.savedByChannel.get(c.channel) || 0) + 1);
     renderClips();
+    if (state.streamers.length) renderStreamers();
   } catch { /* server message shown by refreshState */ }
 }
 
@@ -550,12 +646,22 @@ async function openPlayer(name) {
   const video = $("#player-video");
   video.src = `${src}?v=${c.version}`;
   state.showingSource = false;
-  $("#player-title").textContent = c.channel;
-  $("#player-meta").textContent = `${new Date(c.time).toLocaleString()} · ${c.msgs} chat messages in 10 s` +
-    (c.median ? ` (usually ${c.median})` : "") + ` · ${sizeMB(c.size)}` +
-    (c.folder ? ` · saved in ${c.folder}/${c.name}` : "");
-  $("#player-hook").hidden = !c.title;
-  $("#player-hook").textContent = c.title || "";
+  const avatar = $("#player-avatar");
+  avatar.style.setProperty("--h", hue(c.channel));
+  avatar.textContent = c.channel[0] || "?";
+  $("#player-channel").textContent = c.channel;
+  $("#player-when").textContent = `${new Date(c.time).toLocaleString()} · ${ago(c.time)}`;
+  const h3 = $("#player-title");
+  h3.textContent = c.title || `${c.channel} clip`;
+  h3.classList.toggle("plain", !c.title);
+  $("#player-hook").hidden = !c.title_by;
+  $("#player-hook").textContent = c.title_by === "chat" ? "Hook title from what chat said"
+    : c.title_by ? `Hook title written by ${c.title_by}` : "";
+  $("#player-meta").textContent = `${c.msgs} chat messages in 10 s` + (c.median ? ` (usually ${c.median})` : "") +
+    ` · ${sizeMB(c.size)}`;
+  $("#player-path-row").hidden = !c.folder;
+  $("#player-path").textContent = c.folder ? `${c.folder}/${c.name}` : "";
+  $("#player-path").title = c.path || "";
   const scores = [];
   if (c.hype != null) scores.push(`<span class="score${c.hype >= 70 ? " hot" : ""}" title="How hard chat reacted compared to usual">Chat hype <b>${c.hype}</b>/100</span>`);
   if (c.virality != null) scores.push(`<span class="score${c.virality >= 70 ? " hot" : ""}" title="The AI's estimate (${esc(c.title_by || "")})">Virality <b>${c.virality}</b>/100</span>`);
@@ -571,7 +677,7 @@ async function openPlayer(name) {
   $("#player-dl-srt").hidden = !c.has_srt;
   const del = $("#player-delete");
   del.classList.remove("confirm");
-  del.textContent = "Delete";
+  $("span", del).textContent = "Delete";
   $("#player").hidden = false;
   video.play().catch(() => {});
 
@@ -605,7 +711,17 @@ $("#player").addEventListener("click", (e) => {
     v.play().catch(() => {});
   }
 });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#player").hidden) closePlayer(); });
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  if (!$("#facecam").hidden) $("#facecam").hidden = true;      // the picker sits on top of the player
+  else if (!$("#player").hidden) closePlayer();
+});
+$("#player-path-copy").addEventListener("click", async () => {
+  const c = state.player;
+  if (!c) return;
+  try { await navigator.clipboard.writeText(c.path || `${c.folder}/${c.name}`); toast("File path copied"); }
+  catch { toast("Couldn't copy: select the path and copy it yourself"); }
+});
 
 $("#player-video").addEventListener("timeupdate", () => {
   const t = $("#player-video").currentTime;
@@ -619,7 +735,7 @@ $("#player-delete").addEventListener("click", async (e) => {
   const btn = e.currentTarget;
   if (!btn.classList.contains("confirm")) {
     btn.classList.add("confirm");
-    btn.textContent = "Click again to delete";
+    $("span", btn).textContent = "Click again to delete";
     return;
   }
   const name = state.player?.name;
@@ -845,7 +961,7 @@ function renderSetup() {
     const job = c.job;
     let pill, action = "";
     if (job?.status === "running") pill = `<span class="pill run">Working…</span>`;
-    else if (c.installed) pill = `<span class="pill ok">Installed</span>`;
+    else if (c.installed) pill = `<span class="pill ok">${icon("check")}Installed</span>`;
     else if (c.required) pill = `<span class="pill req">Required · missing</span>`;
     else pill = `<span class="pill">Not installed</span>`;
     if (!c.installed && !c.manual && job?.status !== "running") {
@@ -918,11 +1034,13 @@ async function loadStorage(fromSave) {
     return;
   }
   $("#storage-folder").textContent = d.folder;
-  $("#storage-free").textContent = `${d.free_gb} GB free on this disk; new clips pause below ${d.low_disk_gb} GB.`;
+  $("#storage-free").innerHTML = `${icon("disk")}<span><b>${d.free_gb} GB</b> free on this disk · new clips pause below ${d.low_disk_gb} GB</span>`;
+  const max = Math.max(1, d.sources_bytes || 0, ...Object.values(d.channels).map((r) => r.bytes));
+  const bar = (bytes, cls = "") => `<span class="track"><i class="${cls}" style="width:${Math.max(1, bytes / max * 100).toFixed(1)}%"></i></span>`;
   const rows = Object.entries(d.channels).map(([ch, r]) =>
-    `<li><strong>${esc(ch)}</strong> · ${r.clips} clip${r.clips === 1 ? "" : "s"} · ${gb(r.bytes)}</li>`);
-  if (d.sources_bytes) rows.push(`<li><strong>Clip sources</strong> (for editing) · ${gb(d.sources_bytes)}</li>`);
-  $("#storage-usage").innerHTML = rows.join("") || "<li>No clips yet.</li>";
+    `<li><strong>${esc(ch)}</strong>${bar(r.bytes)}<span class="size">${r.clips} clip${r.clips === 1 ? "" : "s"} · ${gb(r.bytes)}</span></li>`);
+  if (d.sources_bytes) rows.push(`<li><strong>Clip sources</strong>${bar(d.sources_bytes, "src")}<span class="size">${gb(d.sources_bytes)}</span></li>`);
+  $("#storage-usage").innerHTML = rows.join("") || `<li class="muted">No clips yet.</li>`;
   // don't overwrite what someone is typing during the periodic refresh
   for (const [id, key] of [["#keep-sources", "keep_sources_days"], ["#keep-clips", "keep_clips_days"]]) {
     const el = $(id);

@@ -3,38 +3,80 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>clip-watcher</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%237c5cff'/%3E%3Cpath d='M12 9l11 7-11 7z' fill='white'/%3E%3C/svg%3E">
+  <title>clipwatcher</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%237c5cff'/%3E%3Crect x='7.5' y='17' width='4' height='8' rx='1.5' fill='white' opacity='.7'/%3E%3Crect x='14' y='8' width='4' height='17' rx='1.5' fill='white'/%3E%3Crect x='20.5' y='13' width='4' height='12' rx='1.5' fill='white' opacity='.85'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="/static/style.css">
+  <script>
+    // apply the saved theme before the page paints (no flash)
+    try { const t = localStorage.getItem("cw-theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}
+  </script>
 </head>
 <body>
+  <!-- icons: drawn here once, used everywhere with <svg class="i"><use href="#i-name"/></svg> -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-radio" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14"/></symbol>
+      <symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2.5"/><path d="M7.5 3v18M16.5 3v18M3 12h18M3 7.5h4.5M3 16.5h4.5M16.5 7.5H21M16.5 16.5H21"/></symbol>
+      <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.8 5.4L19 10l-5.2 1.6L12 17l-1.8-5.4L5 10l5.2-1.6z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></symbol>
+      <symbol id="i-box" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.3 7L12 12l8.7-5M12 22V12"/></symbol>
+      <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z"/></symbol>
+      <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></symbol>
+      <symbol id="i-scissors" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12"/></symbol>
+      <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></symbol>
+      <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></symbol>
+      <symbol id="i-ext" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></symbol>
+      <symbol id="i-captions" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2.5"/><path d="M7 13h3M13 13h4M7 16h6"/></symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></symbol>
+      <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+      <symbol id="i-folder" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></symbol>
+      <symbol id="i-log" viewBox="0 0 24 24"><path d="M4 17l6-6-6-6M12 19h8"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+      <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5"/><path d="M12 1.5v2.5M12 20v2.5M4.6 4.6l1.8 1.8M17.6 17.6l1.8 1.8M1.5 12H4M20 12h2.5M4.6 19.4l1.8-1.8M17.6 6.4l1.8-1.8"/></symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></symbol>
+      <symbol id="i-auto" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></symbol>
+      <symbol id="i-disk" viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.66 3.58 3 8 3s8-1.34 8-3V6M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3"/></symbol>
+      <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/><rect x="9" y="9" width="6" height="6" rx="1"/><path d="M9 1.5V5M15 1.5V5M9 19v3.5M15 19v3.5M1.5 9H5M1.5 15H5M19 9h3.5M19 15h3.5"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></symbol>
+      <symbol id="i-flame" viewBox="0 0 24 24"><path d="M12 22c4 0 7-2.7 7-6.8 0-3.6-2.5-6-4.2-8.2-.3 2-1.3 3.3-2.6 3.8.4-3.4-1.2-6.5-4-8.8C8.6 5.7 5 8.6 5 14.9 5 19.2 8 22 12 22z"/></symbol>
+    </defs>
+  </svg>
+
   <header class="topbar">
-    <div class="brand">
-      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8"/><path d="M12 9l11 7-11 7z"/></svg>
-      <span>clip-watcher</span>
-    </div>
+    <a class="brand" href="#" data-view-link="streamers" aria-label="clipwatcher home">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect class="mark" width="32" height="32" rx="8"/>
+        <rect x="7.5" y="17" width="4" height="8" rx="1.5" opacity=".7"/><rect x="14" y="8" width="4" height="17" rx="1.5"/>
+        <rect x="20.5" y="13" width="4" height="12" rx="1.5" opacity=".85"/></svg>
+      <span>clip<b>watcher</b></span>
+    </a>
     <nav class="tabs" role="tablist">
-      <button role="tab" data-view="streamers" aria-selected="true">Streamers</button>
-      <button role="tab" data-view="clips" aria-selected="false">Clips <span class="count" id="clip-count">0</span></button>
-      <button role="tab" data-view="ai" aria-selected="false">AI</button>
-      <button role="tab" data-view="setup" aria-selected="false">Setup <span class="count warn" id="setup-count" hidden></span></button>
+      <button role="tab" data-view="streamers" aria-selected="true"><svg class="i"><use href="#i-radio"/></svg><span>Streamers</span></button>
+      <button role="tab" data-view="clips" aria-selected="false"><svg class="i"><use href="#i-film"/></svg><span>Clips</span> <span class="count" id="clip-count">0</span></button>
+      <button role="tab" data-view="ai" aria-selected="false"><svg class="i"><use href="#i-spark"/></svg><span>AI</span></button>
+      <button role="tab" data-view="setup" aria-selected="false"><svg class="i"><use href="#i-box"/></svg><span>Setup</span> <span class="count warn" id="setup-count" hidden></span></button>
     </nav>
     <div class="summary" id="summary"></div>
+    <button class="icon-btn" id="theme" type="button" title="Theme: automatic" aria-label="Switch theme"><svg class="i"><use href="#i-auto"/></svg></button>
   </header>
 
   <main>
     <!-- ============ STREAMERS ============ -->
     <section id="view-streamers" class="view">
       <div class="notice" id="features-off" hidden></div>
-      <form class="card add" id="add-form" autocomplete="off">
-        <h2>Start clipping a streamer</h2>
-        <p class="hint">Paste a Twitch channel name or link. Recording starts as soon as they're live; if they're offline it waits for them.</p>
+      <form class="card add hero" id="add-form" autocomplete="off">
+        <div class="hero-text">
+          <h2>Start clipping a streamer</h2>
+          <p class="hint">Paste a Twitch channel name or link. Recording starts as soon as they're live; if they're offline it waits for them.</p>
+        </div>
         <div class="add-row">
-          <input id="add-channel" type="text" placeholder="e.g. nickmercs or twitch.tv/nickmercs" aria-label="Streamer name or Twitch link" required>
-          <button type="submit" class="primary" id="add-btn">Start recording</button>
+          <label class="input-icon"><span class="prefix">twitch.tv/</span>
+            <input id="add-channel" type="text" placeholder="nickmercs" aria-label="Streamer name or Twitch link" required></label>
+          <button type="submit" class="primary" id="add-btn"><svg class="i"><use href="#i-plus"/></svg>Start recording</button>
         </div>
         <details class="settings" id="add-settings">
-          <summary>Settings</summary>
+          <summary><svg class="i"><use href="#i-sliders"/></svg>Settings</summary>
           <div class="settings-grid" data-settings></div>
         </details>
         <p class="form-error" id="add-error" role="alert"></p>
@@ -42,33 +84,34 @@
 
       <div id="streamers" class="streamers"></div>
       <div id="streamers-empty" class="empty" hidden>
+        <div class="empty-art" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
         <p><strong>No streamers yet.</strong></p>
-        <p>Add one above and clip-watcher will record them, spot chat spikes and turn them into captioned clips.</p>
+        <p>Add one above and clipwatcher will record them, spot chat spikes and turn them into captioned clips.</p>
       </div>
     </section>
 
     <!-- ============ CLIPS ============ -->
     <section id="view-clips" class="view" hidden>
       <div class="toolbar">
-        <input id="clip-search" type="search" placeholder="Search what was said…" aria-label="Search captions">
+        <label class="search"><svg class="i"><use href="#i-search"/></svg>
+          <input id="clip-search" type="search" placeholder="Search what was said or a title…" aria-label="Search clips"></label>
         <select id="clip-channel" aria-label="Filter by streamer"><option value="">All streamers</option></select>
         <select id="clip-sort" aria-label="Sort clips">
           <option value="new">Newest first</option>
-          <option value="best">Best first (viral / hype score)</option>
+          <option value="best">Best first (viral / hype)</option>
         </select>
         <span class="muted" id="clip-shown"></span>
       </div>
       <div id="clips" class="clips"></div>
       <div id="clips-empty" class="empty" hidden>
+        <div class="empty-art" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
         <p><strong>No clips yet.</strong></p>
         <p>When chat explodes on a stream you're recording, the clip shows up here within about half a minute.</p>
       </div>
     </section>
-  </main>
 
-  <!-- ============ AI ============ -->
-  <main>
-    <section id="view-ai" class="view" hidden>
+    <!-- ============ AI ============ -->
+    <section id="view-ai" class="view narrow" hidden>
       <form class="card add ai-form" id="ai-form" autocomplete="off">
         <h2>AI for hook titles, ratings and post captions</h2>
         <p class="hint">Optional. Recording, captions, speaker colours and rendering all run on this PC and never need a key.
@@ -91,18 +134,16 @@
         </div>
         <p class="form-error" id="ai-error" role="alert"></p>
         <div class="ai-result" id="ai-result" hidden></div>
-        <p class="muted small">Keys are stored only on this PC, in the <code>.env</code> file in the project folder.
+        <p class="muted small">Keys are stored only on this PC, in the <code>.env</code> file in the data folder.
           A Claude Pro / ChatGPT Plus / Gemini Advanced subscription doesn't include an API key. The free API keys from
           Google AI Studio, Groq or OpenRouter work fine.</p>
       </form>
     </section>
-  </main>
 
-  <!-- ============ SETUP ============ -->
-  <main>
-    <section id="view-setup" class="view" hidden>
+    <!-- ============ SETUP ============ -->
+    <section id="view-setup" class="view narrow" hidden>
       <div class="card add setup-card">
-        <h2>Setup: what's installed</h2>
+        <h2>What's installed</h2>
         <p class="hint">Nothing is downloaded or installed unless you click it here (or answer yes in
           <code>python -m clipwatcher setup</code>). Missing optional parts just switch that feature off.<span id="setup-python"></span></p>
         <div class="setup-list" id="setup-list"></div>
@@ -110,9 +151,12 @@
         <p class="hint">Which Whisper model makes the captions. Smaller uses less RAM while a clip is made.</p>
         <div class="providers" id="whisper-pick" role="radiogroup" aria-label="Caption model"></div>
         <p class="form-error" id="setup-error" role="alert"></p>
-        <h3 class="setup-sub">Storage</h3>
+      </div>
+      <div class="card add setup-card">
+        <h2>Storage</h2>
         <p class="hint">Finished clips are saved in <code id="storage-folder">clips</code>, one folder per streamer,
-          so you can copy them straight from there. <span id="storage-free"></span></p>
+          so you can copy them straight from there.</p>
+        <p class="storage-free" id="storage-free"></p>
         <ul class="storage-usage" id="storage-usage"></ul>
         <div class="settings-grid storage-grid">
           <label>Keep clip sources for (days)
@@ -134,26 +178,39 @@
   <div class="modal" id="player" hidden>
     <div class="modal-backdrop" data-close></div>
     <div class="modal-body" role="dialog" aria-modal="true" aria-labelledby="player-title">
-      <button class="icon close" data-close aria-label="Close">&times;</button>
+      <button class="icon-btn close" data-close aria-label="Close"><svg class="i"><use href="#i-x"/></svg></button>
       <div class="player-video"><video id="player-video" controls playsinline></video></div>
       <div class="player-side">
-        <p class="hook" id="player-hook" hidden></p>
+        <div class="player-who">
+          <span class="avatar" id="player-avatar"></span>
+          <div>
+            <strong id="player-channel"></strong>
+            <span class="muted small" id="player-when"></span>
+          </div>
+        </div>
         <h3 id="player-title"></h3>
-        <p class="muted" id="player-meta"></p>
+        <p class="hook-by muted small" id="player-hook" hidden></p>
         <div class="scores" id="player-scores"></div>
         <div class="player-actions">
-          <a class="button" id="player-dl" href="#">Download clip</a>
-          <a class="button" id="player-dl-srt" href="#">Captions (.srt)</a>
-          <button class="danger" id="player-delete">Delete</button>
+          <a class="button primary" id="player-dl" href="#"><svg class="i"><use href="#i-download"/></svg>Download</a>
+          <a class="button" id="player-dl-srt" href="#"><svg class="i"><use href="#i-captions"/></svg>Captions</a>
+          <span class="spacer"></span>
+          <button class="danger" id="player-delete"><svg class="i"><use href="#i-trash"/></svg><span>Delete</span></button>
         </div>
+        <div class="path-row" id="player-path-row">
+          <svg class="i"><use href="#i-folder"/></svg>
+          <code id="player-path"></code>
+          <button class="icon-btn small" id="player-path-copy" title="Copy the file path" aria-label="Copy the file path"><svg class="i"><use href="#i-copy"/></svg></button>
+        </div>
+        <p class="muted small" id="player-meta"></p>
         <div class="post" id="player-post" hidden>
           <h4>Suggested post</h4>
           <p id="player-post-text"></p>
-          <button id="player-post-copy">Copy</button>
+          <button id="player-post-copy"><svg class="i"><use href="#i-copy"/></svg>Copy</button>
         </div>
 
         <details class="editor" id="player-editor">
-          <summary>Edit clip</summary>
+          <summary><svg class="i"><use href="#i-scissors"/></svg>Edit clip</summary>
           <p class="muted" id="editor-note"></p>
           <div class="trim">
             <button type="button" id="editor-source">Show the 1-minute source to trim</button>
@@ -175,7 +232,7 @@
           </div>
           <div class="player-actions">
             <button class="primary" id="editor-render">Re-render clip</button>
-            <button id="editor-retitle" title="Write a new hook title (Claude if set up, else from chat)">New AI title</button>
+            <button id="editor-retitle" title="Write a new hook title (the AI if set up, else from chat)">New AI title</button>
           </div>
           <p class="form-error" id="editor-error" role="alert"></p>
         </details>
@@ -237,7 +294,7 @@
   <div class="modal" id="facecam" hidden>
     <div class="modal-backdrop" data-close></div>
     <div class="modal-body facecam-body" role="dialog" aria-modal="true" aria-labelledby="facecam-title">
-      <button class="icon close" data-close aria-label="Close">&times;</button>
+      <button class="icon-btn close" data-close aria-label="Close"><svg class="i"><use href="#i-x"/></svg></button>
       <h3 id="facecam-title">Draw a box around the facecam</h3>
       <p class="muted">Drag over the streamer's camera. It becomes the top part of every clip; the gameplay fills the bottom.</p>
       <div class="facecam-stage" id="facecam-stage">

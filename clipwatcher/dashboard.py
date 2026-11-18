@@ -381,7 +381,7 @@ def clip_info(name: str, meta: dict | None) -> dict:
         when = datetime.fromtimestamp(st.st_mtime if st else time.time())
     srt = p.with_suffix(".srt")
     info = {
-        "name": name, "channel": channel, "msgs": msgs, "folder": p.parent.relative_to(HOME).as_posix(),
+        "name": name, "channel": channel, "msgs": msgs, "folder": p.parent.relative_to(HOME).as_posix(), "path": str(p),
         "time": when.isoformat(timespec="seconds"),
         "size": st.st_size if st else 0, "version": int(st.st_mtime) if st else 0,
         "ready": st is not None, "has_srt": srt.exists(), "text": srt_text(srt),
