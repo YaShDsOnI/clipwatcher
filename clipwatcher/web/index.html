@@ -210,8 +210,9 @@
         </div>
 
         <details class="editor" id="player-editor">
-          <summary><svg class="i"><use href="#i-scissors"/></svg>Edit clip</summary>
+          <summary><svg class="i"><use href="#i-scissors"/></svg>Edit clip <span class="editor-tag" id="editor-tag" hidden>not available</span></summary>
           <p class="muted" id="editor-note"></p>
+          <div id="editor-body">
           <div class="trim">
             <button type="button" id="editor-source">Show the 1-minute source to trim</button>
             <div class="trim-row">
@@ -235,6 +236,7 @@
             <button id="editor-retitle" title="Write a new hook title (the AI if set up, else from chat)">New AI title</button>
           </div>
           <p class="form-error" id="editor-error" role="alert"></p>
+          </div>
         </details>
 
         <h4>Transcript</h4>

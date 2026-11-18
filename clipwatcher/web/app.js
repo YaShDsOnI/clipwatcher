@@ -754,9 +754,16 @@ $("#player-delete").addEventListener("click", async (e) => {
 // ------------------------------------------------------------------ clip editor
 
 function fillEditor(c) {
-  const ed = $("#player-editor");
-  ed.hidden = !c.editable;
-  if (!c.editable) return;
+  // always shown, so it's clear why a clip can't be edited instead of the option silently vanishing
+  $("#editor-body").hidden = !c.editable;
+  $("#editor-tag").hidden = !!c.editable;
+  if (!c.editable) {
+    $("#editor-note").textContent = c.status === "queued" || c.status === "rendering"
+      ? "Available once this clip has finished rendering."
+      : "This clip can't be trimmed or restyled any more: its 1-minute source video is gone. Every clip keeps " +
+        "its source for as many days as Setup → Storage says (0 = forever); you can still download it.";
+    return;
+  }
   const s = c.settings || {};
   $("#editor-start").value = c.start;
   $("#editor-end").value = c.end;
