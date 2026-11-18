@@ -207,11 +207,12 @@ list is remembered - press Start on a card to record again.
  GOOD SETTINGS
 ---------------------------------------------------------------------
 
-Sensitivity (spike = this many times the usual chat):
-   - Small streamer (under ~20 messages per 10 s):     2.5
+Sensitivity (spike = this many times the usual chat). Default 1.7.
    - Big streamer (100+ messages per 10 s):             1.6 - 1.8
-   Big chats are always busy and rarely double, so a lower number is
-   needed. Lower = more clips. You can change it while recording.
+   - Small streamer (under ~20 messages per 10 s):     up to 2.5
+   Big chats are always busy and rarely double, so the default is
+   low. If a small channel gets clips of ordinary chatter, raise it.
+   Lower = more clips. You can change it while recording.
 
 Min messages per 10 s:  ignore bursts smaller than this (default 10).
 
@@ -264,7 +265,7 @@ Setup tab says ffmpeg or streamlink is missing
 
 The streamer is live but no clips appear
    - Wait for the 3-minute warm-up.
-   - Big streamer? Lower Sensitivity to 1.6 (Settings on the card).
+   - Still nothing? Lower Sensitivity to 1.6 (Settings on the card).
    - Use "Clip now" for a moment you don't want to miss.
 
 Clips have no captions

@@ -41,7 +41,7 @@ CLIP_LINE_RE = re.compile(r"^\w+: clip (\d\d:\d\d:\d\d) \(\d+ msgs\) -> ")
 LINE_TIME_RE = re.compile(r"^\[(\d\d:\d\d:\d\d)\] (.*)$")
 CLEANUP_EVERY = 3600              # seconds between retention cleanups
 
-DEFAULTS = {"min": 10, "ratio": 2.5, "quality": "best", "layout": "blur", "template": "karaoke",
+DEFAULTS = {"min": 10, "ratio": 1.7, "quality": "best", "layout": "blur", "template": "karaoke",
             "title": "auto", "facecam": None, "captions": True, "speakers": True, "caption_words": 4,
             "keep_recordings": False, "title_in_video": False, "gap": 30, "max_per_hour": 0}
 QUALITIES = ["best", "1080p60", "720p", "480p"]

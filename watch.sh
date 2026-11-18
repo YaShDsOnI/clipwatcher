@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # clip-watcher: record a Twitch stream and auto-clip chat spikes.
-#   ./watch.sh <twitch_channel> [--min N] [--ratio 2.5] [--model base] ...   (--help for all options)
+#   ./watch.sh <twitch_channel> [--min N] [--ratio 1.7] [--model base] ...   (--help for all options)
 set -euo pipefail
 cd "$(dirname "$0")"
 

@@ -102,7 +102,7 @@ The AI models are never kept loaded. Each clip starts its own render process, wh
 
 1. **Recording:** streamlink records the stream to `rec/`. If the channel is offline, it waits for the stream to start; streamlink 7+ skips ads automatically. When a stream ends, it waits for the streamer to come back and starts a new recording (`--once` stops instead).
 2. **Chat:** chat is read anonymously over IRC (`irc.chat.twitch.tv:6667`, `NICK justinfan12345`, no token), keeping who said what for hook titles.
-3. **Spike detection:** messages are counted in 10 s buckets. A bucket is a spike when it has at least `--ratio` (2.5) × the usual level **and** at least `--min` (10) messages. The usual level is the lower of the median of the last 3 minutes and of the last 10 minutes, so chat that stays wild for several minutes keeps getting clipped instead of becoming the new normal. Chat history is kept for 2 minutes across restarts, so changing settings doesn't start a new 3-minute warm-up.
+3. **Spike detection:** messages are counted in 10 s buckets. A bucket is a spike when it has at least `--ratio` (1.7) × the usual level **and** at least `--min` (10) messages. The usual level is the lower of the median of the last 3 minutes and of the last 10 minutes, so chat that stays wild for several minutes keeps getting clipped instead of becoming the new normal. Chat history is kept for 2 minutes across restarts, so changing settings doesn't start a new 3-minute warm-up.
    - **Spam and bots don't count:** each chatter counts at most `--per-user` (2) messages per bucket, and known bots (Nightbot, StreamElements, …) never count.
    - **One moment, one clip:** spike buckets close together are merged into one moment, and the clip is centred on its peak. There's at least `--gap` (30) seconds between clips, and optionally at most `--max-per-hour` clips per hour. "Clip now" ignores both limits.
 4. **Source cut:** each clip keeps a 1-minute source in `clips/.sources/`: the clip plus 15 s each side. It's stream-copied (no re-encode), so it costs almost no CPU, and it's what makes later re-editing possible.
@@ -171,7 +171,7 @@ clip-watcher watch lacy --ratio 1.6 --max-per-hour 15
 `./watch.sh` does the same without installing.
 
 > [!TIP]
-> **Big streamers need a lower `--ratio`.** A chat that always runs at 100–200 messages per 10 s rarely doubles: a hype moment there is often only 1.6× normal. Use about `1.6`–`1.8` for big channels and keep `2.5` for small ones. If that gives too many clips, raise `--gap` or set `--max-per-hour`.
+> **Tuning `--ratio` (default 1.7).** Busy chats are always busy and rarely double: a chat that runs at 100–200 messages per 10 s often only reaches 1.6–1.8× normal at a hype moment, which is why the default is 1.7. On a small channel, if ordinary chatter gets clipped, raise it to about `2.5`. If you get too many clips, raise `--gap` or set `--max-per-hour`.
 
 ## Configuration
 
@@ -245,7 +245,7 @@ Cleanup runs when the dashboard starts and every hour after that, and never touc
 | option | default | |
 |---|---|---|
 | `--min N` | 10 | minimum messages per 10 s bucket to count as a spike |
-| `--ratio R` | 2.5 | spike multiple of the rolling median |
+| `--ratio R` | 1.7 | spike multiple of the rolling median |
 | `--gap S` | 30 | minimum seconds between the end of one clip and the start of the next |
 | `--max-per-hour N` | 0 | at most N automatic clips per streamer per hour (0 = no limit) |
 | `--per-user N` | 2 | each chatter counts at most N messages per 10 s bucket (0 = no limit); bots never count |

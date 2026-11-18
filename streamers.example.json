@@ -4,7 +4,7 @@
       "channel": "example_streamer",
       "settings": {
         "min": 10,
-        "ratio": 2.5,
+        "ratio": 1.7,
         "gap": 30,
         "max_per_hour": 0,
         "quality": "best",

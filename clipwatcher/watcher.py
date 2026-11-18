@@ -299,7 +299,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("channels", nargs="+", metavar="channel",
                    help="one or more Twitch channel names (or twitch.tv URLs)")
     p.add_argument("--min", type=int, default=10, help="minimum messages in a 10 s bucket to count as a spike")
-    p.add_argument("--ratio", type=float, default=2.5, help="spike threshold as a multiple of the median")
+    p.add_argument("--ratio", type=float, default=1.7, help="spike threshold as a multiple of the median")
     p.add_argument("--window", type=int, default=180, help="seconds of history for the median")
     p.add_argument("--before", type=float, default=20, help="seconds of video before the spike")
     p.add_argument("--after", type=float, default=10, help="seconds of video after the spike")
