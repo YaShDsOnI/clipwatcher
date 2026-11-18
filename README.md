@@ -165,6 +165,7 @@ Click **Edit** on any clip for a Clipchamp-style editor. **The original clip is 
 
 - **Timeline** with thumbnails and the sound's waveform; zoom with the slider or Ctrl + mouse wheel.
 - **Cut:** drag a part's edges to trim it, **split** at the playhead (S), select a part and **delete** it (Del) to cut out the middle.
+- **Move parts:** drag a part along the timeline to leave **blank space** before it (black and silent; music and text keep playing), or past another part to **swap** them. Click a blank space to set its length or delete it.
 - **Speed** per part: 0.5× to 2×, video and sound together.
 - **Zoom punch-in** per part: zooms in on a moment and holds it, the classic reaction effect.
 - **Text:** presets (hook title band, big reaction, subtitle box, label); drag text on the video; size, colours, fade or pop-in; set when it shows on the text track.

@@ -27,7 +27,10 @@ def project(**over):
 def test_clean_project_clamps_and_refuses():
     media = {"source": SRC, "clip": CLIP}
     p = editor.clean_project(project(segments=[{"in": -5, "out": 999, "speed": 3}]), media, {})
-    assert p["segments"] == [{"in": 0.0, "out": 60.0, "speed": 2.0, "punch": None}]
+    assert p["segments"] == [{"in": 0.0, "out": 60.0, "speed": 2.0, "punch": None, "gap": 0.0}]
+    p = editor.clean_project(project(segments=[{"in": 0, "out": 5, "gap": 2.5}, {"in": 9, "out": 10, "gap": -3}]), media, {})
+    assert [s["gap"] for s in p["segments"]] == [2.5, 0.0]
+    assert editor.total_duration(p["segments"]) == 8.5 and editor.segment_starts(p["segments"]) == [2.5, 7.5]
     with pytest.raises(ValueError, match="isn't available"):
         editor.clean_project(project(media="source"), {"source": None, "clip": CLIP}, {})
     with pytest.raises(ValueError, match="120 characters"):
@@ -48,6 +51,22 @@ def test_retime_words_follows_cuts_and_speed():
     out = editor.retime_words(words, segs)
     assert [(w.text, w.start, w.end) for w in out] == [("kept", 1.0, 1.5), ("fast", 11.0, 11.5)]
     assert out[0].speaker == 0 or out[1].speaker == 0                # main voice re-ranked to white
+
+
+def test_retime_words_skips_blank_space():
+    words = [Word(11, 11.5, "a"), Word(26, 26.5, "b")]
+    segs = [{"in": 10, "out": 20, "speed": 1, "gap": 1.5}, {"in": 25, "out": 30, "speed": 1, "gap": 2}]
+    assert [(w.text, w.start) for w in editor.retime_words(words, segs)] == [("a", 2.5), ("b", 14.5)]
+
+
+def test_build_ffmpeg_blank_space(tmp_path):
+    media = {**SRC, "path": tmp_path / "src.mp4"}
+    segs = [{"in": 10, "out": 12}, {"in": 20, "out": 22, "gap": 1.5}]
+    p = editor.clean_project(project(segments=segs), {"source": media, "clip": None}, {})
+    cmd = editor.build_ffmpeg(p, media, {}, None, tmp_path / "out.mp4")
+    graph = cmd[cmd.index("-filter_complex") + 1]
+    assert "color=c=black:s=1280x720:r=30:d=1.500" in graph and "concat=n=3:v=1:a=1" in graph
+    assert cmd[cmd.index("-t") + 1] == "5.500"
 
 
 def test_build_ffmpeg_graph(tmp_path):
@@ -95,7 +114,7 @@ def test_export_makes_a_new_file_and_never_touches_the_original(home):
     sound = editor.add_music(music.read_bytes(), "beep.wav")
     media = editor.media_for(NAME, meta)
     raw = project(aspect="4:5", segments=[{"in": 2, "out": 4, "speed": 1, "punch": {"at": 0.5, "zoom": 1.3, "dur": 0.2}},
-                                          {"in": 6, "out": 8, "speed": 2}],
+                                          {"in": 6, "out": 8, "speed": 2, "gap": 0.5}],
                   music=[{"id": sound["id"], "start": 0.5, "offset": 0, "dur": 2, "volume": 0.5}])
     p = editor.clean_project(raw, media, editor.music_library())
     progress = []
@@ -104,7 +123,7 @@ def test_export_makes_a_new_file_and_never_touches_the_original(home):
     assert out.parent == clip.parent / "edits" and out.name.startswith(clip.stem + "_edit-")
     info = editor.probe(out)
     assert (info["width"], info["height"]) == (1080, 1350)
-    assert abs(info["duration"] - 3.0) < 0.3                          # 2 s + 2 s at 2x
+    assert abs(info["duration"] - 3.5) < 0.3                          # 2 s + 0.5 s blank + 2 s at 2x
     assert progress[-1] == 1.0
     assert hashlib.sha256(clip.read_bytes()).hexdigest() == before     # the original is untouched
 

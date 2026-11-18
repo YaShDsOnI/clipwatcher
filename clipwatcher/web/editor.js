@@ -35,23 +35,24 @@
   const segDur = (s) => (s.out - s.in) / s.speed;
   const uid = () => Math.random().toString(36).slice(2, 10);
   const fmt = (t) => { t = Math.max(0, t); const m = Math.floor(t / 60); return `${m}:${(t - m * 60).toFixed(1).padStart(4, "0")}`; };
-  function timing() {
+  const gapOf = (s) => s.gap || 0;     // blank (black, silent) seconds before a part
+  function timing() {                  // where each part starts (after its blank space), and the length
     const starts = []; let t = 0;
-    for (const s of P().segments) { starts.push(t); t += segDur(s); }
+    for (const s of P().segments) { t += gapOf(s); starts.push(t); t += segDur(s); }
     return { starts, total: t };
   }
-  function locate(t) {                 // output time -> part index + time in the media
+  function locate(t) {                 // output time -> part index + time in the media (+ in a blank?)
     const segs = P().segments, { starts } = timing();
     let i = segs.length - 1;
     for (let k = 0; k < segs.length; k++) if (t < starts[k] + segDur(segs[k]) - 1e-6) { i = k; break; }
     const s = segs[i];
-    return { i, mt: clamp(s.in + (t - starts[i]) * s.speed, s.in, s.out) };
+    return { i, mt: clamp(s.in + (t - starts[i]) * s.speed, s.in, s.out), blank: t < starts[i] - 1e-6 };
   }
   function selected() {
     const s = ED.sel;
     if (!s) return null;
     if (s.type === "sound") return P().audio;          // the original video's own sound
-    const list = s.type === "seg" ? P().segments : s.type === "text" ? P().texts : P().music;
+    const list = s.type === "seg" || s.type === "gap" ? P().segments : s.type === "text" ? P().texts : P().music;
     return list[s.i] || null;
   }
 
@@ -180,10 +181,12 @@
     if (!ED.project) return;
     const { total } = timing();
     ED.t = clamp(t, 0, Math.max(0, total - 0.001));
-    const { i, mt } = locate(ED.t);
+    const { i, mt, blank } = locate(ED.t);
     ED.i = i;
+    ED.blank = blank;
     video.playbackRate = P().segments[i].speed;
     if (force || Math.abs(video.currentTime - mt) > 0.03) { try { video.currentTime = mt; } catch { /* not loaded yet */ } }
+    if (ED.playing) { if (blank) video.pause(); else if (video.paused) video.play().catch(() => {}); }
     syncAudio();
     updateClock();
     renderOverlays();
@@ -193,8 +196,9 @@
     const { total } = timing();
     if (ED.t >= total - 0.05) seekTo(0, true);
     ED.playing = true;
+    ED.lastTick = performance.now();
     video.playbackRate = P().segments[ED.i].speed;
-    video.play().catch(() => { ED.playing = false; updatePlayButton(); });
+    if (!ED.blank) video.play().catch(() => { ED.playing = false; updatePlayButton(); });
     updatePlayButton();
     syncAudio();
     requestAnimationFrame(loop);
@@ -205,16 +209,28 @@
     for (const a of ED.audios.values()) a.pause();
     updatePlayButton();
   }
-  function loop() {
+  function loop(now = performance.now()) {
     if (!ED.playing || !ED.open) return;
     const segs = P().segments, { starts, total } = timing();
+    const elapsed = Math.min(0.25, Math.max(0, (now - (ED.lastTick || now)) / 1000));
+    ED.lastTick = now;
     let s = segs[ED.i];
-    if (video.currentTime >= s.out - 0.02 || video.ended) {
-      if (ED.i + 1 < segs.length) {                  // jump to the next kept part
+    if (ED.blank) {                                  // blank space: black and silent, on a real-time clock
+      ED.t += elapsed;
+      if (ED.t >= starts[ED.i]) {
+        ED.blank = false;
+        ED.t = starts[ED.i];
+        video.currentTime = s.in;
+        video.playbackRate = s.speed;
+        video.play().catch(() => {});
+      }
+    } else if (video.currentTime >= s.out - 0.02 || video.ended) {
+      if (ED.i + 1 < segs.length) {                  // on to the next kept part (after its blank space)
         ED.i += 1; s = segs[ED.i];
         video.currentTime = s.in;
         video.playbackRate = s.speed;
-        ED.t = starts[ED.i];
+        if (gapOf(s) > 0) { ED.blank = true; video.pause(); ED.t = starts[ED.i] - gapOf(s); }
+        else ED.t = starts[ED.i];
       } else {
         ED.t = total; pause(); updateClock(); draw(); return;
       }
@@ -335,6 +351,11 @@
   function draw() {
     if (!ED.open) return;
     const w = canvas.width, h = canvas.height, f = P().frame;
+    if (locate(ED.t).blank) {                         // blank space plays as black (text layers still show)
+      ctx.fillStyle = "#000"; ctx.fillRect(0, 0, w, h);
+      drawCaptions(w, h);
+      return;
+    }
     compose(octx, w, h);
     // zoom & pan, then a punch-in around the centre of that view: the same order as the export
     let rw = w / f.zoom, rh = h / f.zoom, rx = (w - rw) * f.x, ry = (h - rh) * f.y;
@@ -351,6 +372,7 @@
     const words = [];
     let t0 = 0;
     for (const s of P().segments) {
+      t0 += gapOf(s);
       for (const w of ED.data.words) {
         if (w.start >= s.in && w.start < s.out) {
           words.push({ start: t0 + (w.start - s.in) / s.speed, end: t0 + (Math.min(w.end, s.out) - s.in) / s.speed, text: w.text, speaker: w.speaker || 0 });
@@ -456,7 +478,8 @@
     if (!ED.open) return;
     const { starts, total } = timing(), sc = $("#ed-scroll");
     const fit = Math.max(8, (sc.clientWidth - 40) / Math.max(total, 1));
-    ED.pps = fit * Math.pow(12, ED.zoom / 100);
+    // keep the scale still while something is being dragged, so it stays under the pointer as the edit grows
+    if (!drag?.moved) ED.pps = fit * Math.pow(12, ED.zoom / 100);
     const width = Math.max(sc.clientWidth, total * ED.pps + 40);
     $("#ed-inner").style.width = `${width}px`;
     // ruler: a label every 0.5-60 s depending on the zoom
@@ -475,7 +498,11 @@
       const tags = [];
       if (s.speed !== 1) tags.push(`<span>${icon("gauge")}${s.speed}×</span>`);
       if (s.punch) tags.push(`<span>${icon("punch")}${s.punch.zoom}×</span>`);
-      return `<div class="ed-seg${sel ? " sel" : ""}" data-seg="${i}" title="Part ${i + 1}: ${fmt(segDur(s))}" ` +
+      const gap = gapOf(s), gapSel = ED.sel?.type === "gap" && ED.sel.i === i;
+      const blank = gap > 0 ? `<div class="ed-gap${gapSel ? " sel" : ""}" data-gap="${i}" title="Blank space: ${gap.toFixed(1)} s (click, then Del to remove)" ` +
+        `style="left:${(starts[i] - gap) * ED.pps}px;width:${Math.max(3, gap * ED.pps - 2)}px"><span>${gap * ED.pps > 44 ? `${gap.toFixed(1)} s` : ""}</span></div>` : "";
+      return blank + `<div class="ed-seg${sel ? " sel" : ""}${drag?.kind === "move" && drag.i === i && drag.reorder != null ? " lifted" : ""}" data-seg="${i}" ` +
+        `title="Part ${i + 1}: ${fmt(segDur(s))} · drag to move it, drag the edges to trim" ` +
         `style="left:${starts[i] * ED.pps}px;width:${Math.max(4, segDur(s) * ED.pps - 2)}px;${strip}">` +
         `<span class="h l" data-h="l"></span><span class="ed-seg-tag">${tags.join("")}</span><span class="h r" data-h="r"></span></div>`;
     }).join("");
@@ -546,13 +573,21 @@
     if (e.button !== 0) return;
     const inner = $("#ed-inner"), x = e.clientX - inner.getBoundingClientRect().left;
     const segEl = e.target.closest("[data-seg]"), txtEl = e.target.closest("[data-text]"), musEl = e.target.closest("[data-music]");
+    const gapEl = e.target.closest("[data-gap]");
     const handle = e.target.dataset.h || null;
     try { inner.setPointerCapture(e.pointerId); } catch { /* capture is a nicety: dragging still works without it */ }
     if (segEl) {
       const i = Number(segEl.dataset.seg), s = P().segments[i];
       select({ type: "seg", i });
-      drag = handle ? { kind: "trim", i, handle, x0: x, a: s.in, b: s.out } : { kind: "scrub" };
-      if (!handle) seekTo(x / ED.pps);
+      if (handle) drag = { kind: "trim", i, handle, x0: x, a: s.in, b: s.out };
+      else {                                       // drag the part itself: move it, leaving blank space, or reorder
+        drag = { kind: "move", i, x0: x, gaps0: P().segments.map(gapOf), starts0: timing().starts, reorder: null };
+        seekTo(x / ED.pps);
+      }
+    } else if (gapEl) {
+      select({ type: "gap", i: Number(gapEl.dataset.gap) });
+      drag = { kind: "scrub" };
+      seekTo(x / ED.pps);
     } else if (txtEl || musEl) {
       const type = txtEl ? "text" : "music", i = Number((txtEl || musEl).dataset[type === "text" ? "text" : "music"]);
       const item = (type === "text" ? P().texts : P().music)[i];
@@ -580,6 +615,29 @@
       const s = P().segments[drag.i];
       if (drag.handle === "l") s.in = r3(clamp(drag.a + dt * s.speed, 0, s.out - 0.1));
       else s.out = r3(clamp(drag.b + dt * s.speed, s.in + 0.1, media().duration));
+    } else if (drag.kind === "move") {
+      const segs = P().segments, i = drag.i, s = segs[i];
+      segs.forEach((g, k) => { g.gap = drag.gaps0[k]; });         // always work from where things were
+      // its centre past a neighbour's centre = reorder (shown with a marker, done on release)
+      const centre = drag.starts0[i] + dt + segDur(s) / 2;
+      const others = drag.starts0.map((st, k) => ({ k, st, c: st + segDur(segs[k]) / 2 })).filter((o) => o.k !== i);
+      const index = others.filter((o) => o.c < centre).length;
+      drag.dx = x - drag.x0;
+      if (index !== i) {
+        drag.reorder = index;
+        const before = others[index - 1];
+        drag.dropAt = before ? before.st + segDur(segs[before.k]) : 0;
+      } else {
+        drag.reorder = null;
+        if (dt >= 0) {                              // right: blank space before it; the next part keeps its place
+          s.gap = r3(drag.gaps0[i] + dt);           // (once that space is used up, later parts are pushed along)
+          if (segs[i + 1]) segs[i + 1].gap = r3(Math.max(0, drag.gaps0[i + 1] - dt));
+        } else {                                    // left: closes its blank space, the next part stays put
+          const back = Math.min(-dt, drag.gaps0[i]);
+          s.gap = r3(drag.gaps0[i] - back);
+          if (segs[i + 1]) segs[i + 1].gap = r3(drag.gaps0[i + 1] + back);
+        }
+      }
     } else {
       const it = (drag.kind === "text" ? P().texts : P().music)[drag.i], o = drag.item;
       if (drag.kind === "text") {
@@ -605,11 +663,34 @@
         const { starts } = timing(), s = P().segments[drag.i];
         seekTo(drag.handle === "l" ? starts[drag.i] : starts[drag.i] + segDur(s) - 0.04);
       }
+      if (drag?.kind === "move") {
+        const el = $(`#ed-lane-video [data-seg="${drag.i}"]`), line = $("#ed-dropline");
+        line.hidden = drag.reorder == null;
+        if (drag.reorder != null) {               // lifted: follows the pointer, the marker shows where it lands
+          el?.classList.add("lifted");
+          if (el) el.style.transform = `translateX(${drag.dx}px)`;
+          line.style.left = `${drag.dropAt * ED.pps}px`;
+        }
+        const { starts } = timing();
+        if (drag.reorder == null) seekTo(starts[drag.i]);
+      }
     });
   });
   const endDrag = () => {
-    if (drag?.moved) { ED.lastKey = null; afterChange(); }
-    drag = null;
+    const d = drag;
+    drag = null;                                  // first, so the timeline re-fits to the new length right now
+    $("#ed-dropline").hidden = true;
+    if (d?.kind === "move" && d.moved && d.reorder != null) {
+      const segs = P().segments, from = d.i, to = d.reorder;
+      segs.forEach((g, k) => { g.gap = d.gaps0[k]; });
+      const [part] = segs.splice(from, 1);
+      if (segs[from]) segs[from].gap = r3(gapOf(segs[from]) + d.gaps0[from]);   // its blank space stays where it was
+      part.gap = 0;
+      segs.splice(to, 0, part);
+      ED.sel = { type: "seg", i: to };
+      toast(`Moved part ${from + 1} to position ${to + 1}`);
+    }
+    if (d?.moved) { ED.lastKey = null; afterChange(); }
   };
   $("#ed-inner").addEventListener("pointerup", endDrag);
   $("#ed-inner").addEventListener("pointercancel", endDrag);
@@ -634,7 +715,7 @@
     const { i, mt } = locate(ED.t), s = P().segments[i];
     if (mt - s.in < 0.1 || s.out - mt < 0.1) { toast("Move the playhead away from the edge of a part to split it."); return; }
     edit((p) => {
-      const first = { ...s, out: r3(mt), punch: null }, second = { ...s, in: r3(mt), punch: null };
+      const first = { ...s, out: r3(mt), punch: null }, second = { ...s, in: r3(mt), punch: null, gap: 0 };
       if (s.punch) {
         const cut = segDur(first);
         if (s.punch.at < cut) first.punch = s.punch;
@@ -650,7 +731,18 @@
     if (!s) { toast("Select a part, text or sound on the timeline first."); return; }
     if (s.type === "sound") { toast("The video's own sound can't be removed: set its volume to 0 or press M to mute it."); return; }
     if (s.type === "seg" && P().segments.length < 2) { toast("This is the only part left: trim its edges instead."); return; }
-    edit((p) => { (s.type === "seg" ? p.segments : s.type === "text" ? p.texts : p.music).splice(s.i, 1); });
+    if (s.type === "gap") {
+      edit((p) => { p.segments[s.i].gap = 0; });
+      select(null);
+      toast("Blank space removed");
+      return;
+    }
+    edit((p) => {
+      if (s.type === "seg") {                      // later parts close up; a blank space before it stays
+        const [gone] = p.segments.splice(s.i, 1);
+        if (p.segments[s.i]) p.segments[s.i].gap = r3(gapOf(p.segments[s.i]) + gapOf(gone));
+      } else (s.type === "text" ? p.texts : p.music).splice(s.i, 1);
+    });
     if (s.type === "music") loadMusicAudio();
     select(null);
   }
@@ -780,6 +872,13 @@
           .map(([k, v]) => `<kbd>${k}</kbd><span>${v}</span>`).join("") + `</div>`;
       return;
     }
+    if (s.type === "gap") {
+      el.innerHTML = `<h3>Blank space</h3><p>Black and silent, before part ${s.i + 1}. Music and text keep playing over it.</p>` +
+        `<label class="ed-field">Length (s)<input type="number" data-k="sel.gap" step="0.1" min="0" max="60" value="${gapOf(item)}"></label>` +
+        `<p class="small">Tip: drag a part on the Video track to make or close blank space, or past another part to swap them.</p>` +
+        `<div class="ed-btns"><button type="button" class="danger" data-act="delete">${icon("trash")}Remove blank space</button></div>`;
+      return;
+    }
     if (s.type === "sound") {
       const muted = item.volume === 0;
       el.innerHTML = `<h3>${icon("film")} Original sound</h3><p>The sound of the video itself (voices, game audio). ` +
@@ -796,6 +895,8 @@
       el.innerHTML = `<h3>Part ${s.i + 1} of ${P().segments.length}</h3><p>${fmt(len)} in the edit · from ${fmt(item.in)} to ${fmt(item.out)} of the ${P().media === "source" ? "1-minute source" : "clip"}.</p>` +
         `<div class="ed-two"><label class="ed-field">Starts at (s)<input type="number" data-k="sel.in" step="0.1" min="0" max="${m.duration}" value="${item.in}"></label>` +
         `<label class="ed-field">Ends at (s)<input type="number" data-k="sel.out" step="0.1" min="0" max="${m.duration}" value="${item.out}"></label></div>` +
+        `<label class="ed-field">Blank space before it (s)<input type="number" data-k="sel.gap" step="0.1" min="0" max="60" value="${gapOf(item)}"></label>` +
+        `<p class="small">Drag the part on the timeline to move it (leaving blank space) or past another part to swap them.</p>` +
         `<h4>${icon("gauge")} Speed</h4><div class="ed-seg-ctl ed-speeds">${SPEEDS.map((v) =>
           `<button type="button" data-set="sel.speed" data-val="${v}" aria-pressed="${item.speed === v}">${v}×</button>`).join("")}</div>` +
         `<h4>${icon("punch")} Zoom punch-in</h4>` +
@@ -853,6 +954,7 @@
     edit(() => {
       setPath(path, v);
       const seg = ED.sel?.type === "seg" ? selected() : null;
+      if (path === "sel.gap") { const g = selected(); g.gap = r3(clamp(g.gap, 0, 60)); }
       if (seg && (path === "sel.in" || path === "sel.out")) {
         seg.in = r3(clamp(seg.in, 0, media().duration - 0.1)); seg.out = r3(clamp(seg.out, seg.in + 0.1, media().duration));
       }

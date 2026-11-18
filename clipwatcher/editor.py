@@ -96,9 +96,9 @@ def default_project(kind: str, meta: dict | None, media: dict) -> dict:
     if kind == "source":
         start = float(meta.get("start", 0))
         end = float(meta.get("end", media["duration"]))
-        segments = [{"in": round(start, 3), "out": round(min(end, media["duration"]), 3), "speed": 1.0, "punch": None}]
+        segments = [{"in": round(start, 3), "out": round(min(end, media["duration"]), 3), "speed": 1.0, "punch": None, "gap": 0.0}]
     else:
-        segments = [{"in": 0.0, "out": media["duration"], "speed": 1.0, "punch": None}]
+        segments = [{"in": 0.0, "out": media["duration"], "speed": 1.0, "punch": None, "gap": 0.0}]
     layout = s.get("layout") if s.get("layout") in LAYOUTS else "blur"
     if layout == "split" and not s.get("facecam"):
         layout = "blur"
@@ -139,7 +139,18 @@ def segment_duration(s: dict) -> float:
 
 
 def total_duration(segments: list[dict]) -> float:
-    return sum(segment_duration(s) for s in segments)
+    """Length of the edit: every part plus the blank space ("gap") before it."""
+    return sum(s.get("gap", 0) + segment_duration(s) for s in segments)
+
+
+def segment_starts(segments: list[dict]) -> list[float]:
+    """Where each part starts in the edit (after its blank space)."""
+    starts, t = [], 0.0
+    for s in segments:
+        t += s.get("gap", 0)
+        starts.append(t)
+        t += segment_duration(s)
+    return starts
 
 
 def clean_project(raw: dict, media: dict[str, dict | None], music: dict[str, dict]) -> dict:
@@ -161,7 +172,8 @@ def clean_project(raw: dict, media: dict[str, dict | None], music: dict[str, dic
         if b - a < 0.1:
             continue
         speed = min(SPEEDS, key=lambda v: abs(v - _num(s.get("speed"), 0.5, 2.0, 1.0)))
-        seg = {"in": round(a, 3), "out": round(b, 3), "speed": speed, "punch": None}
+        gap = round(_num(s.get("gap"), 0, 60, 0), 3)       # blank (black, silent) seconds before this part
+        seg = {"in": round(a, 3), "out": round(b, 3), "speed": speed, "punch": None, "gap": gap if gap >= 0.05 else 0.0}
         p = s.get("punch")
         if isinstance(p, dict):
             seg_len = (b - a) / speed
@@ -253,6 +265,7 @@ def retime_words(words: list[Word], segments: list[dict]) -> list[Word]:
     out: list[Word] = []
     t0 = 0.0
     for s in segments:
+        t0 += s.get("gap", 0)
         a, b, sp = s["in"], s["out"], s["speed"]
         for w in words:
             if a <= w.start < b:
@@ -282,20 +295,28 @@ def build_ffmpeg(project: dict, media: dict, music_paths: dict[str, Path], ass_n
     total = total_duration(segs)
     fc: list[str] = []
 
-    # 1. every kept part, at its speed, then joined
+    # 1. every kept part, at its speed, with black/silent blank space where the editor left a gap; joined
     fc.append(f"[0:v]split={n}" + "".join(f"[vs{i}]" for i in range(n)))
     if media["audio"]:
         fc.append(f"[0:a]asplit={n}" + "".join(f"[as{i}]" for i in range(n)))
+    vw, vh = _even(media["width"] or W), _even(media["height"] or H)
+    pieces = []
     for i, s in enumerate(segs):
         sp = s["speed"]
-        fc.append(f"[vs{i}]trim=start={s['in']:.3f}:end={s['out']:.3f},setpts=(PTS-STARTPTS)/{sp},fps={FPS}[v{i}]")
+        if s.get("gap", 0) > 0:                    # blank space before this part
+            fc.append(f"color=c=black:s={vw}x{vh}:r={FPS}:d={s['gap']:.3f},format=yuv420p,setsar=1[g{i}]")
+            fc.append(f"aevalsrc=0|0:s=48000:d={s['gap']:.3f}[ga{i}]")
+            pieces.append(f"[g{i}][ga{i}]")
+        fc.append(f"[vs{i}]trim=start={s['in']:.3f}:end={s['out']:.3f},setpts=(PTS-STARTPTS)/{sp},fps={FPS},"
+                  f"scale={vw}:{vh},format=yuv420p,setsar=1[v{i}]")
         if media["audio"]:
             tempo = f",atempo={sp}" if sp != 1 else ""
             fc.append(f"[as{i}]atrim=start={s['in']:.3f}:end={s['out']:.3f},asetpts=PTS-STARTPTS{tempo},"
                       f"aformat=sample_rates=48000:channel_layouts=stereo[a{i}]")
         else:
             fc.append(f"aevalsrc=0|0:s=48000:d={segment_duration(s):.3f}[a{i}]")
-    fc.append("".join(f"[v{i}][a{i}]" for i in range(n)) + f"concat=n={n}:v=1:a=1[vc][ac]")
+        pieces.append(f"[v{i}][a{i}]")
+    fc.append("".join(pieces) + f"concat=n={len(pieces)}:v=1:a=1[vc][ac]")
 
     # 2. framing into the output size
     f = project["frame"]
@@ -317,13 +338,12 @@ def build_ffmpeg(project: dict, media: dict, music_paths: dict[str, Path], ass_n
         cur = "vz"
 
     # 4. zoom punch-ins: zoom in quickly at a moment and hold until that part ends
-    terms, t0 = [], 0.0
-    for s in segs:
+    terms = []
+    for s, t0 in zip(segs, segment_starts(segs), strict=True):
         p = s.get("punch")
         if p:
             a, e = t0 + p["at"], t0 + segment_duration(s)
             terms.append(f"{p['zoom'] - 1:.3f}*min(1,max(0,(it-{a:.3f})/{p['dur']:.3f}))*between(it,{a:.3f},{e:.3f})")
-        t0 += segment_duration(s)
     if terms:
         fc.append(f"[{cur}]zoompan=z='1+{'+'.join(terms)}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
                   f":d=1:s={W}x{H}:fps={FPS},setsar=1[vp]")
