@@ -1,5 +1,11 @@
 blank_issues_enabled: true
 contact_links:
+  - name: Questions and ideas
+    url: https://github.com/YaShDsOnI/clipwatcher/discussions
+    about: Ask how to do something, share clips you made, or suggest ideas.
+  - name: Report a security problem privately
+    url: https://github.com/YaShDsOnI/clipwatcher/security/advisories/new
+    about: Please don't open a public issue for security problems.
   - name: Setup help
     url: https://github.com/YaShDsOnI/clipwatcher/blob/main/SETUP%20GUIDE.txt
     about: Step-by-step install guide for Windows, plus fixes for common problems.

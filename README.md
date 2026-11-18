@@ -1,11 +1,12 @@
 <p align="center">
-  <img src="docs/assets/banner.svg" alt="clipwatcher: when chat explodes, the clip makes itself" width="100%">
+  <img src="https://raw.githubusercontent.com/YaShDsOnI/clipwatcher/main/docs/assets/banner.svg" alt="clipwatcher: when chat explodes, the clip makes itself" width="100%">
 </p>
 
 <p align="center">
   <a href="https://github.com/YaShDsOnI/clipwatcher/actions/workflows/ci.yml"><img src="https://github.com/YaShDsOnI/clipwatcher/actions/workflows/ci.yml/badge.svg" alt="tests"></a>
   <img src="https://img.shields.io/badge/python-3.12%20%7C%203.13%20%7C%203.14-3776AB?logo=python&logoColor=white" alt="Python 3.12 | 3.13 | 3.14">
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-555" alt="Windows | Linux | macOS">
+  <a href="https://github.com/YaShDsOnI/clipwatcher/releases"><img src="https://img.shields.io/github/v/release/YaShDsOnI/clipwatcher?color=7c5cff&label=release" alt="latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-7c5cff" alt="MIT license"></a>
 </p>
 
@@ -365,7 +366,7 @@ docs/assets/      banner and social preview image
 
 </details>
 
-Bug reports and ideas are welcome in [Issues](https://github.com/YaShDsOnI/clipwatcher/issues/new/choose).
+Contributions are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md) and the issues labelled [good first issue](https://github.com/YaShDsOnI/clipwatcher/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22). Questions and ideas go to [Discussions](https://github.com/YaShDsOnI/clipwatcher/discussions), bugs to [Issues](https://github.com/YaShDsOnI/clipwatcher/issues/new/choose), and security problems to the private [security report](SECURITY.md). What changed in each version is in the [changelog](CHANGELOG.md).
 
 ## Responsible use
 

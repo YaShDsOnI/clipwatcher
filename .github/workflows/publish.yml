@@ -1,0 +1,51 @@
+name: publish
+
+# Builds the package on every GitHub Release and publishes it to PyPI with "trusted publishing"
+# (no password or token is stored anywhere). The upload only runs once the repository variable
+# PYPI_PUBLISH is set to "true", after the PyPI side has been connected (see CONTRIBUTING / README).
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - run: pip install build twine
+      - run: python -m build
+      - run: twine check dist/*
+      - name: The release tag matches the version in the code
+        if: github.event_name == 'release'
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          version=$(python -c "import clipwatcher; print(clipwatcher.__version__)")
+          test "v$version" = "$TAG" || { echo "tag $TAG doesn't match version $version"; exit 1; }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  pypi:
+    needs: build
+    if: vars.PYPI_PUBLISH == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/clipwatcher/
+    permissions:
+      id-token: write          # trusted publishing
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

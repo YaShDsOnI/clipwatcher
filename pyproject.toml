@@ -3,7 +3,7 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "clip-watcher"
+name = "clipwatcher"
 dynamic = ["version"]
 description = "Live-stream clipping for Twitch, driven by chat: when chat explodes, the moment becomes a captioned vertical clip."
 readme = "README.md"
@@ -33,15 +33,17 @@ dependencies = ["streamlink>=7"]
 captions = ["faster-whisper>=1.1"]          # word-synced captions; needs Python 3.12-3.14 (64-bit)
 speakers = ["sherpa-onnx>=1.10", "numpy"]   # a caption colour per speaker
 claude = ["anthropic>=2.0"]                 # only for Claude hook titles; other AI providers need nothing
-all = ["clip-watcher[captions,speakers,claude]"]
+all = ["clipwatcher[captions,speakers,claude]"]
 dev = ["pytest>=8", "ruff>=0.6"]
 
 [project.urls]
 Homepage = "https://github.com/YaShDsOnI/clipwatcher"
 Issues = "https://github.com/YaShDsOnI/clipwatcher/issues"
+Changelog = "https://github.com/YaShDsOnI/clipwatcher/blob/main/CHANGELOG.md"
 
 [project.scripts]
 clip-watcher = "clipwatcher.__main__:main"
+clipwatcher = "clipwatcher.__main__:main"
 
 [tool.setuptools]
 packages = ["clipwatcher"]

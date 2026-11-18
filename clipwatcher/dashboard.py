@@ -816,6 +816,29 @@ class Handler(BaseHTTPRequestHandler):
     def send_error_json(self, status, message):
         self.send_json({"error": message}, status)
 
+    # ---- who may talk to the dashboard
+    # It listens on 127.0.0.1 only, but a web page open in the same browser could still try to reach
+    # it: directly (cross-site requests) or by pointing its own domain name at 127.0.0.1 ("DNS
+    # rebinding"). So every request must be addressed to localhost by name, and anything that changes
+    # something must come from the dashboard's own page.
+    def local_hosts(self) -> set[str]:
+        port = self.server.server_address[1]
+        return {f"localhost:{port}", f"127.0.0.1:{port}", f"[::1]:{port}"}
+
+    def request_allowed(self, changes_something: bool) -> bool:
+        hosts = self.local_hosts()
+        if (self.headers.get("Host") or "").strip().lower() not in hosts:
+            self.send_error_json(HTTPStatus.FORBIDDEN, "Blocked: open the dashboard at http://localhost:"
+                                 f"{self.server.server_address[1]}")
+            return False
+        if changes_something:
+            origin = (self.headers.get("Origin") or "").strip().lower()
+            site = (self.headers.get("Sec-Fetch-Site") or "").strip().lower()
+            if (origin and origin not in {f"http://{h}" for h in hosts}) or site in ("cross-site", "same-site"):
+                self.send_error_json(HTTPStatus.FORBIDDEN, "Blocked: this request didn't come from the dashboard page.")
+                return False
+        return True
+
     def read_json(self) -> dict:
         n = int(self.headers.get("Content-Length") or 0)
         if not n:
@@ -880,6 +903,8 @@ class Handler(BaseHTTPRequestHandler):
         self.do_GET()
 
     def do_GET(self):
+        if not self.request_allowed(changes_something=False):
+            return
         url = urlparse(self.path)
         path = unquote(url.path)
         if path in ("/", "/index.html"):
@@ -993,9 +1018,16 @@ class Handler(BaseHTTPRequestHandler):
         self.send_error_json(HTTPStatus.NOT_FOUND, "not found")
 
     def do_POST(self):
+        if not self.request_allowed(changes_something=True):
+            self.close_connection = True             # the body is left unread
+            return
         path = unquote(urlparse(self.path).path)
         if path == "/api/music":                     # raw file upload: read before any JSON parsing
             return self.upload_music()
+        ctype = (self.headers.get("Content-Type") or "").lower()
+        if int(self.headers.get("Content-Length") or 0) and not ctype.startswith("application/json"):
+            self.close_connection = True             # plain HTML forms can't send JSON: refuse anything else
+            return self.send_error_json(HTTPStatus.UNSUPPORTED_MEDIA_TYPE, "Send JSON.")
         body = self.read_json()
         try:
             if path == "/api/streamers":
@@ -1065,6 +1097,8 @@ class Handler(BaseHTTPRequestHandler):
         return self.send_json(item)
 
     def do_DELETE(self):
+        if not self.request_allowed(changes_something=True):
+            return
         path = unquote(urlparse(self.path).path)
         try:
             if m := re.fullmatch(r"/api/edits/(\w{1,25})/([\w.-]+)", path):
