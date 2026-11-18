@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Setup help
+    url: https://github.com/YaShDsOnI/clipwatcher/blob/main/SETUP%20GUIDE.txt
+    about: Step-by-step install guide for Windows, plus fixes for common problems.

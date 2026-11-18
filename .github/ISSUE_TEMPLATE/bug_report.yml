@@ -1,0 +1,44 @@
+name: Bug report
+description: Something doesn't work as it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for reporting! Please never paste API keys or the contents of your `.env` file.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: The relevant lines from the streamer's card log, `logs/<channel>.log`, or the terminal.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: clip-watcher version
+      description: "`clip-watcher --version`"
+      placeholder: "0.2.0"
+  - type: input
+    id: system
+    attributes:
+      label: OS and Python
+      description: The Setup tab shows the Python version.
+      placeholder: "Windows 11, Python 3.14 (64-bit)"
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Recording / chat
+        - Spike detection (too many / too few clips)
+        - Captions or speaker colours
+        - AI hook titles
+        - Dashboard
+        - Setup / install
+        - Other
