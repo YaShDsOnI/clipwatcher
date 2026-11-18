@@ -70,7 +70,7 @@ In the spirit of [SupoClip](https://github.com/FujiwaraChoki/supoclip) and OpusC
 
 ```bash
 git clone https://github.com/YaShDsOnI/clipwatcher.git && cd clipwatcher
-pip install -e ".[all]"            # or just  pip install -e .  and add parts later from the Setup tab
+pip install -e ".[all]"            # all optional parts (or just: pip install -e .)
 winget install Gyan.FFmpeg         # or: choco / apt / brew install ffmpeg
 clip-watcher                       # opens the dashboard at http://localhost:8765
 ```
