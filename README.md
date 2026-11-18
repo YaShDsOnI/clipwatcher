@@ -6,6 +6,7 @@
   <a href="https://github.com/YaShDsOnI/clipwatcher/actions/workflows/ci.yml"><img src="https://github.com/YaShDsOnI/clipwatcher/actions/workflows/ci.yml/badge.svg" alt="tests"></a>
   <img src="https://img.shields.io/badge/python-3.12%20%7C%203.13%20%7C%203.14-3776AB?logo=python&logoColor=white" alt="Python 3.12 | 3.13 | 3.14">
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-555" alt="Windows | Linux | macOS">
+  <a href="https://pypi.org/project/clipwatcher/"><img src="https://img.shields.io/pypi/v/clipwatcher?color=7c5cff&label=pypi" alt="PyPI"></a>
   <a href="https://github.com/YaShDsOnI/clipwatcher/releases"><img src="https://img.shields.io/github/v/release/YaShDsOnI/clipwatcher?color=7c5cff&label=release" alt="latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-7c5cff" alt="MIT license"></a>
 </p>
@@ -67,6 +68,16 @@ In the spirit of [SupoClip](https://github.com/FujiwaraChoki/supoclip) and OpusC
 ## Quick start
 
 **Windows, no terminal:** download `clip-watcher.zip` from [Releases](https://github.com/YaShDsOnI/clipwatcher/releases), unzip it and double-click **`Start clip-watcher.bat`**. [`SETUP GUIDE.txt`](SETUP%20GUIDE.txt) walks through it step by step.
+
+**With pip** (Python 3.12–3.14):
+
+```bash
+pip install "clipwatcher[all]"     # or just  pip install clipwatcher  and add parts later from the Setup tab
+winget install Gyan.FFmpeg         # or: choco / apt / brew install ffmpeg
+clipwatcher                        # opens the dashboard at http://localhost:8765
+```
+
+Installed this way, your clips and settings live in `~/clip-watcher` (see [Data folder](#data-folder)).
 
 **From source:**
 
