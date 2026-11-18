@@ -1,0 +1,23 @@
+{
+  "streamers": [
+    {
+      "channel": "example_streamer",
+      "settings": {
+        "min": 10,
+        "ratio": 2.5,
+        "gap": 30,
+        "max_per_hour": 0,
+        "quality": "best",
+        "layout": "blur",
+        "template": "karaoke",
+        "title": "auto",
+        "facecam": null,
+        "captions": true,
+        "speakers": true,
+        "caption_words": 4,
+        "keep_recordings": false,
+        "title_in_video": false
+      }
+    }
+  ]
+}

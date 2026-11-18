@@ -1,0 +1,290 @@
+=====================================================================
+  clip-watcher  -  SETUP GUIDE
+  Install it, start it, and record your first streamer
+=====================================================================
+
+clip-watcher records a Twitch streamer while they are live, watches
+their chat, and when chat suddenly explodes it cuts that moment into a
+vertical 30-second clip with captions (ready for Instagram
+Reels and YouTube Shorts). Everything runs on your own PC.
+
+This guide is for Windows 10 / 11. Mac and Linux notes are at the end.
+Setup takes about 10 minutes and you only do it once.
+
+
+---------------------------------------------------------------------
+ STEP 1  -  Install Python
+---------------------------------------------------------------------
+
+Use Python 3.14 (64-bit). NOT the newest 3.15: the captions part
+(faster-whisper) doesn't work with Python 3.15 yet, so its install
+fails in the Setup tab.
+
+1. Download the Python 3.14 installer (64-bit) directly:
+       https://www.python.org/ftp/python/3.14.10/python-3.14.10-amd64.exe
+   (or go to https://www.python.org/downloads/windows/ , find the
+   newest "Python 3.14.x" in the list and click
+   "Download Windows installer (64-bit)". Don't use the big yellow
+   "Download Python" button - it gives you 3.15.)
+2. Run the installer you downloaded.
+3. IMPORTANT: on the first screen, tick the box
+       [x] Add python.exe to PATH
+   at the bottom, then click "Install Now".
+4. When it says "Setup was successful", close it.
+
+Already installed Python 3.15? You don't have to remove it. Just also
+install 3.14 as above: "Start clip-watcher.bat" automatically uses
+3.14 when it's there. Then do Step 2 again (it installs streamlink
+for 3.14) and press Install for faster-whisper in the Setup tab.
+
+
+---------------------------------------------------------------------
+ STEP 2  -  Install ffmpeg and streamlink
+---------------------------------------------------------------------
+
+ffmpeg cuts and renders the clips; streamlink records the stream.
+
+1. Press the Windows key, type  cmd  and press Enter.
+   A black Command Prompt window opens.
+
+2. Copy this line, paste it into the window (right-click pastes) and
+   press Enter:
+
+       winget install Gyan.FFmpeg
+
+   If it asks to agree to terms, type  Y  and press Enter.
+   Wait until it says "Successfully installed".
+
+3. Then paste this line and press Enter:
+
+       py -3.14 -m pip install streamlink
+
+   (if "py" is not found, use:  python -m pip install streamlink )
+
+4. CLOSE the Command Prompt window. (ffmpeg only works in windows
+   opened after it was installed.)
+
+   If "winget" is not found: download ffmpeg from
+   https://www.gyan.dev/ffmpeg/builds/ ("ffmpeg-release-full.7z"),
+   unzip it to C:\ffmpeg and add C:\ffmpeg\bin to your PATH
+   (Windows search: "Edit the system environment variables" ->
+   Environment Variables -> Path -> Edit -> New).
+
+
+---------------------------------------------------------------------
+ STEP 3  -  Unzip clip-watcher
+---------------------------------------------------------------------
+
+1. Right-click  clip-watcher.zip  ->  "Extract All..."
+2. Pick a place with plenty of free disk space (recordings can take
+   several GB per hour while a stream is live), for example
+       D:\clip-watcher
+3. Open the extracted "clip-watcher" folder.
+
+
+---------------------------------------------------------------------
+ STEP 4  -  Start it
+---------------------------------------------------------------------
+
+Double-click   Start clip-watcher.bat
+
+A black window opens and your web browser opens the dashboard at
+       http://localhost:8765
+
+Keep the black window open while you are clipping - closing it stops
+all recordings. (If the browser didn't open, type the address above
+into your browser yourself.)
+
+If Windows shows "Windows protected your PC": click "More info" ->
+"Run anyway". If the firewall asks, you can click Cancel - the
+dashboard only needs to be reachable from your own PC.
+
+
+---------------------------------------------------------------------
+ STEP 5  -  Setup tab: download the optional parts
+---------------------------------------------------------------------
+
+clip-watcher never downloads anything without asking you. In the
+dashboard, click the  Setup  tab. It lists every part and whether it
+is installed:
+
+   ffmpeg, streamlink ...... must show "installed" (Step 2)
+   faster-whisper .......... click Install  (~60 MB)  - makes captions
+   Caption model ........... under "Caption model", click Download on
+                             one of them:
+                                tiny  ~75 MB   - least RAM
+                                base  ~145 MB  - recommended
+                                small ~485 MB  - best captions
+                             then "Use this one" if it isn't selected.
+   sherpa-onnx ............. click Install  (~30 MB)  \  a different
+   Speaker models .......... click Download (~32 MB)  /  caption colour
+                                                          per person
+
+Each button needs TWO clicks: click it, then "Click again to confirm".
+Skipping a part is fine - the clips are still made, just without that
+feature (for example without captions).
+
+
+---------------------------------------------------------------------
+ STEP 6  -  Optional: a free AI key for hook titles
+---------------------------------------------------------------------
+
+Without a key, clip titles come from what chat was spamming - that is
+free and works fine. With a key, an AI writes a catchy hook title, a
+virality score and a suggested post caption with hashtags.
+The title is only shown in the dashboard - the clip itself has just the
+video and its captions. (To put the title into the video too, tick
+"Show the hook title in the video" in a streamer's Settings.)
+
+Free option (recommended):
+1. Go to  https://aistudio.google.com/apikey  and sign in with Google.
+2. Click "Create API key" and copy it.
+3. In the dashboard click the  AI  tab -> choose "Gemini" -> paste the
+   key -> click "Save & test". It shows a sample title if it works.
+
+Groq (console.groq.com/keys) and OpenRouter (openrouter.ai/keys) are
+also free. Your key is stored only on your PC, in the ".env" file.
+Never share your key or that file with anyone.
+
+
+---------------------------------------------------------------------
+ STEP 7  -  Start recording a streamer
+---------------------------------------------------------------------
+
+1. Click the  Streamers  tab.
+2. In "Start clipping a streamer", type the streamer's Twitch name or
+   paste their link, e.g.   lacy   or   https://www.twitch.tv/lacy
+3. Optional: click "Settings" first to change the layout, caption
+   style and so on (see "Good settings" below).
+4. Click  Start recording.
+
+A card appears for the streamer:
+   - "Live - recording"   they are live and being recorded
+   - "Waiting for stream" they are offline; recording starts by
+                          itself as soon as they go live
+   - The graph shows chat messages every 10 seconds. Purple bars are
+     moments that were clipped.
+
+The first 3 minutes are a warm-up while it learns how busy that chat
+normally is. After that, every chat explosion becomes a clip.
+
+Missed a moment? Press  Clip now  on the card: it clips the last
+20 seconds plus the next 10 right away.
+
+You can add several streamers; each one gets its own card.
+
+
+---------------------------------------------------------------------
+ STEP 8  -  Watch and download your clips
+---------------------------------------------------------------------
+
+Click the  Clips  tab. A new clip appears about a minute after the
+moment happened. Click a clip to play it. From there you can:
+   - Download clip / Captions (.srt)
+   - Edit clip: trim it, change layout or caption style, change the
+     title, then "Re-render clip"
+   - Delete it (click twice)
+
+The clip files are also in the "clips" folder inside clip-watcher,
+one folder per streamer: for example  clips\lacy\  holds all of
+lacy's clips (the .mp4 and its .srt captions), ready to upload.
+
+
+---------------------------------------------------------------------
+ STOPPING
+---------------------------------------------------------------------
+
+- One streamer:  press  Stop  on their card (it finishes any clip in
+  progress first).
+- Everything:    click the black window and press  Ctrl + C , or just
+  close the window.
+
+Next time, double-click "Start clip-watcher.bat" again; your streamer
+list is remembered - press Start on a card to record again.
+
+
+---------------------------------------------------------------------
+ GOOD SETTINGS
+---------------------------------------------------------------------
+
+Sensitivity (spike = this many times the usual chat):
+   - Small streamer (under ~20 messages per 10 s):     2.5
+   - Big streamer (100+ messages per 10 s):             1.6 - 1.8
+   Big chats are always busy and rarely double, so a lower number is
+   needed. Lower = more clips. You can change it while recording.
+
+Min messages per 10 s:  ignore bursts smaller than this (default 10).
+
+Too many clips? Two settings on the card help:
+   - Gap between clips: seconds of quiet between two clips
+     (default 30). Raise it to 60-120 for very busy chats.
+   - Max clips per hour: 0 = no limit. For example 15 keeps only
+     the first 15 moments in any hour. Clip now always works.
+   In the Clips tab, sort by "Best first" to see the top clips.
+
+Layout:
+   - Blurred   the whole video in the middle over a blurred copy
+   - Crop      zoomed into the middle
+   - Split     facecam on top, gameplay below ("Draw it on a frame"
+               to mark where the facecam is)
+
+Recording quality: "720p" saves a lot of disk space compared to
+"best". Full recordings are deleted automatically once their clips are
+made, unless you tick "Keep full recordings".
+
+Disk space (Setup tab -> Storage):
+   - Keep clip sources for 7 days (default): after that a clip can't
+     be trimmed any more, but the clip itself stays.
+   - Keep clips for 0 days = forever (default). Set e.g. 30 to delete
+     clips older than a month automatically.
+   When less than 3 GB is free, new clips pause instead of filling
+   the disk.
+
+
+---------------------------------------------------------------------
+ PROBLEMS?
+---------------------------------------------------------------------
+
+"Python was not found"
+   Install Python again (Step 1) and tick "Add python.exe to PATH".
+
+faster-whisper "Install failed" in the Setup tab
+   The Setup tab says why under the button. Almost always it is the
+   Python version: the top of the Setup tab shows which Python
+   clip-watcher runs on. It must be 3.12, 3.13 or 3.14 (64-bit) -
+   install Python 3.14 as in Step 1 and start clip-watcher again.
+
+Setup tab says ffmpeg or streamlink is missing
+   Do Step 2 again, then CLOSE the black window and start
+   "Start clip-watcher.bat" again.
+
+"port 8765 is already in use"
+   clip-watcher is already running - look for its other black window,
+   or just open http://localhost:8765 in your browser.
+
+The streamer is live but no clips appear
+   - Wait for the 3-minute warm-up.
+   - Big streamer? Lower Sensitivity to 1.6 (Settings on the card).
+   - Use "Clip now" for a moment you don't want to miss.
+
+Clips have no captions
+   Setup tab -> install Captions and download a caption model, then
+   open the clip -> Edit clip -> Re-render clip.
+
+The PC is slow while a clip is being made
+   Making a clip uses about 600 MB of RAM for ~20 seconds, one clip at
+   a time. Choose the "tiny" caption model in the Setup tab to use less.
+
+
+---------------------------------------------------------------------
+ MAC / LINUX
+---------------------------------------------------------------------
+
+Install Python 3.10+, then in a terminal:
+   Mac:    brew install ffmpeg      Linux:  sudo apt install ffmpeg
+   pip3 install streamlink
+Then in the clip-watcher folder run:   ./dashboard.sh
+(or:  python3 -m clipwatcher )
+Everything from Step 5 on is the same.
+
+For all the details, see README.md in this folder.

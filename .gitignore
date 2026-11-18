@@ -1,0 +1,31 @@
+# --- your data: never commit (clips, recordings, other people's chat, API keys) ---
+clips/
+rec/
+run/
+logs/
+models/
+share/
+.env
+.env.*
+streamers.json
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- editors / OS ---
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini

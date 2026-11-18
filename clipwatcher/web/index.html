@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>clip-watcher</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%237c5cff'/%3E%3Cpath d='M12 9l11 7-11 7z' fill='white'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8"/><path d="M12 9l11 7-11 7z"/></svg>
+      <span>clip-watcher</span>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-view="streamers" aria-selected="true">Streamers</button>
+      <button role="tab" data-view="clips" aria-selected="false">Clips <span class="count" id="clip-count">0</span></button>
+      <button role="tab" data-view="ai" aria-selected="false">AI</button>
+      <button role="tab" data-view="setup" aria-selected="false">Setup <span class="count warn" id="setup-count" hidden></span></button>
+    </nav>
+    <div class="summary" id="summary"></div>
+  </header>
+
+  <main>
+    <!-- ============ STREAMERS ============ -->
+    <section id="view-streamers" class="view">
+      <div class="notice" id="features-off" hidden></div>
+      <form class="card add" id="add-form" autocomplete="off">
+        <h2>Start clipping a streamer</h2>
+        <p class="hint">Paste a Twitch channel name or link. Recording starts as soon as they're live; if they're offline it waits for them.</p>
+        <div class="add-row">
+          <input id="add-channel" type="text" placeholder="e.g. nickmercs or twitch.tv/nickmercs" aria-label="Streamer name or Twitch link" required>
+          <button type="submit" class="primary" id="add-btn">Start recording</button>
+        </div>
+        <details class="settings" id="add-settings">
+          <summary>Settings</summary>
+          <div class="settings-grid" data-settings></div>
+        </details>
+        <p class="form-error" id="add-error" role="alert"></p>
+      </form>
+
+      <div id="streamers" class="streamers"></div>
+      <div id="streamers-empty" class="empty" hidden>
+        <p><strong>No streamers yet.</strong></p>
+        <p>Add one above and clip-watcher will record them, spot chat spikes and turn them into captioned clips.</p>
+      </div>
+    </section>
+
+    <!-- ============ CLIPS ============ -->
+    <section id="view-clips" class="view" hidden>
+      <div class="toolbar">
+        <input id="clip-search" type="search" placeholder="Search what was said…" aria-label="Search captions">
+        <select id="clip-channel" aria-label="Filter by streamer"><option value="">All streamers</option></select>
+        <select id="clip-sort" aria-label="Sort clips">
+          <option value="new">Newest first</option>
+          <option value="best">Best first (viral / hype score)</option>
+        </select>
+        <span class="muted" id="clip-shown"></span>
+      </div>
+      <div id="clips" class="clips"></div>
+      <div id="clips-empty" class="empty" hidden>
+        <p><strong>No clips yet.</strong></p>
+        <p>When chat explodes on a stream you're recording, the clip shows up here within about half a minute.</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============ AI ============ -->
+  <main>
+    <section id="view-ai" class="view" hidden>
+      <form class="card add ai-form" id="ai-form" autocomplete="off">
+        <h2>AI for hook titles, ratings and post captions</h2>
+        <p class="hint">Optional. Recording, captions, speaker colours and rendering all run on this PC and never need a key.
+          An AI only writes the hook title, the virality scores and a suggested post caption. Without one, titles come from chat for free.
+          The AI runs in the cloud, so it uses no RAM here.</p>
+        <p class="ai-active" id="ai-active"></p>
+        <div class="providers" id="ai-providers" role="radiogroup" aria-label="AI provider"></div>
+        <div class="ai-fields" id="ai-fields">
+          <label>API key <input type="password" id="ai-key" placeholder="paste your key" autocomplete="new-password">
+            <small id="ai-key-note"></small></label>
+          <label>Model <input type="text" id="ai-model">
+            <small id="ai-model-note"></small></label>
+          <label id="ai-url-row">Base URL <input type="text" id="ai-url" placeholder="https://…/v1">
+            <small>Any OpenAI-compatible API: DeepSeek, Mistral, Together, a local server…</small></label>
+        </div>
+        <div class="player-actions">
+          <button type="submit" class="primary" id="ai-save">Save</button>
+          <button type="button" id="ai-test">Save &amp; test</button>
+          <button type="button" class="danger" id="ai-remove" hidden>Remove this key</button>
+        </div>
+        <p class="form-error" id="ai-error" role="alert"></p>
+        <div class="ai-result" id="ai-result" hidden></div>
+        <p class="muted small">Keys are stored only on this PC, in the <code>.env</code> file in the project folder.
+          A Claude Pro / ChatGPT Plus / Gemini Advanced subscription doesn't include an API key. The free API keys from
+          Google AI Studio, Groq or OpenRouter work fine.</p>
+      </form>
+    </section>
+  </main>
+
+  <!-- ============ SETUP ============ -->
+  <main>
+    <section id="view-setup" class="view" hidden>
+      <div class="card add setup-card">
+        <h2>Setup: what's installed</h2>
+        <p class="hint">Nothing is downloaded or installed unless you click it here (or answer yes in
+          <code>python -m clipwatcher setup</code>). Missing optional parts just switch that feature off.<span id="setup-python"></span></p>
+        <div class="setup-list" id="setup-list"></div>
+        <h3 class="setup-sub">Caption model</h3>
+        <p class="hint">Which Whisper model makes the captions. Smaller uses less RAM while a clip is made.</p>
+        <div class="providers" id="whisper-pick" role="radiogroup" aria-label="Caption model"></div>
+        <p class="form-error" id="setup-error" role="alert"></p>
+        <h3 class="setup-sub">Storage</h3>
+        <p class="hint">Finished clips are saved in <code id="storage-folder">clips</code>, one folder per streamer,
+          so you can copy them straight from there. <span id="storage-free"></span></p>
+        <ul class="storage-usage" id="storage-usage"></ul>
+        <div class="settings-grid storage-grid">
+          <label>Keep clip sources for (days)
+            <input type="number" id="keep-sources" min="0" max="3650" step="1">
+            <small>The 1-minute source each clip keeps for trimming and re-rendering. 0 = keep forever.</small>
+          </label>
+          <label>Keep clips for (days)
+            <input type="number" id="keep-clips" min="0" max="3650" step="1">
+            <small>Deletes the whole clip after this many days. 0 = keep forever.</small>
+          </label>
+        </div>
+        <div class="player-actions"><button id="storage-save">Save storage settings</button></div>
+        <p class="form-error" id="storage-error" role="alert"></p>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============ PLAYER ============ -->
+  <div class="modal" id="player" hidden>
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-body" role="dialog" aria-modal="true" aria-labelledby="player-title">
+      <button class="icon close" data-close aria-label="Close">&times;</button>
+      <div class="player-video"><video id="player-video" controls playsinline></video></div>
+      <div class="player-side">
+        <p class="hook" id="player-hook" hidden></p>
+        <h3 id="player-title"></h3>
+        <p class="muted" id="player-meta"></p>
+        <div class="scores" id="player-scores"></div>
+        <div class="player-actions">
+          <a class="button" id="player-dl" href="#">Download clip</a>
+          <a class="button" id="player-dl-srt" href="#">Captions (.srt)</a>
+          <button class="danger" id="player-delete">Delete</button>
+        </div>
+        <div class="post" id="player-post" hidden>
+          <h4>Suggested post</h4>
+          <p id="player-post-text"></p>
+          <button id="player-post-copy">Copy</button>
+        </div>
+
+        <details class="editor" id="player-editor">
+          <summary>Edit clip</summary>
+          <p class="muted" id="editor-note"></p>
+          <div class="trim">
+            <button type="button" id="editor-source">Show the 1-minute source to trim</button>
+            <div class="trim-row">
+              <label>Start (s) <input type="number" id="editor-start" step="0.1" min="0"></label>
+              <button type="button" id="editor-set-start" hidden>Start here</button>
+              <label>End (s) <input type="number" id="editor-end" step="0.1" min="0"></label>
+              <button type="button" id="editor-set-end" hidden>End here</button>
+            </div>
+          </div>
+          <div class="settings-grid">
+            <label>Layout <select id="editor-layout" data-options="layouts"></select>
+              <small id="editor-facecam-row">Facecam: <span id="editor-facecam-label">not set</span>
+                · <button type="button" class="link" id="editor-facecam">Draw…</button></small></label>
+            <label>Caption style <select id="editor-template" data-options="templates"></select></label>
+            <label>Hook title <input type="text" id="editor-title" maxlength="80" placeholder="(no title)"></label>
+            <label class="check"><input type="checkbox" id="editor-captions"> Burn captions in</label>
+            <label class="check"><input type="checkbox" id="editor-title-video"> Show the title in the video</label>
+          </div>
+          <div class="player-actions">
+            <button class="primary" id="editor-render">Re-render clip</button>
+            <button id="editor-retitle" title="Write a new hook title (Claude if set up, else from chat)">New AI title</button>
+          </div>
+          <p class="form-error" id="editor-error" role="alert"></p>
+        </details>
+
+        <h4>Transcript</h4>
+        <ol class="transcript" id="player-transcript"></ol>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" hidden></div>
+
+  <template id="settings-template">
+    <label>Min messages per 10 s
+      <input type="number" name="min" min="1" max="10000" step="1">
+      <small>Ignore bursts smaller than this.</small>
+    </label>
+    <label>Sensitivity
+      <input type="number" name="ratio" min="1" max="20" step="0.1">
+      <small>Spike = this many times the usual chat. Lower = more clips.</small>
+    </label>
+    <label>Gap between clips (s)
+      <input type="number" name="gap" min="0" max="3600" step="5">
+      <small>Chat that stays wild gives one clip, not one every 30 s.</small>
+    </label>
+    <label>Max clips per hour
+      <input type="number" name="max_per_hour" min="0" max="1000" step="1">
+      <small>0 = no limit. "Clip now" always works.</small>
+    </label>
+    <label>Recording quality
+      <select name="quality"></select>
+      <small>Lower saves disk space.</small>
+    </label>
+    <label>Layout
+      <select name="layout" data-options="layouts"></select>
+      <small data-facecam-row>Facecam box: <span data-facecam-label>not set</span>
+        · <button type="button" class="link" data-act-facecam>Draw it on a frame…</button></small>
+    </label>
+    <label>Caption style
+      <select name="template" data-options="templates"></select>
+    </label>
+    <label>Hook title
+      <select name="title" data-options="title_modes"></select>
+      <small data-claude-note></small>
+    </label>
+    <label>Words per caption
+      <input type="number" name="caption_words" min="1" max="8" step="1">
+    </label>
+    <label class="check"><input type="checkbox" name="captions"> Burn captions into the clip</label>
+    <label class="check"><input type="checkbox" name="speakers"> Different colour per speaker</label>
+    <label class="check"><input type="checkbox" name="title_in_video"> Show the hook title in the video
+      <small>(off: the clip has only the video and captions; the title is shown here in the dashboard)</small></label>
+    <label class="check"><input type="checkbox" name="keep_recordings"> Keep full recordings
+      <small>(off: deleted once clipped; every clip keeps a 1-minute source for editing)</small></label>
+    <input type="hidden" name="facecam">
+  </template>
+
+  <!-- ============ FACECAM PICKER ============ -->
+  <div class="modal" id="facecam" hidden>
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-body facecam-body" role="dialog" aria-modal="true" aria-labelledby="facecam-title">
+      <button class="icon close" data-close aria-label="Close">&times;</button>
+      <h3 id="facecam-title">Draw a box around the facecam</h3>
+      <p class="muted">Drag over the streamer's camera. It becomes the top part of every clip; the gameplay fills the bottom.</p>
+      <div class="facecam-stage" id="facecam-stage">
+        <img id="facecam-img" alt="A frame from the stream" draggable="false">
+        <div class="facecam-box" id="facecam-box" hidden></div>
+        <p class="muted facecam-loading" id="facecam-loading">Getting a frame from the stream…</p>
+      </div>
+      <div class="player-actions">
+        <button class="primary" id="facecam-save" disabled>Use this box</button>
+        <button data-close>Cancel</button>
+        <button id="facecam-clear">Remove box</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
