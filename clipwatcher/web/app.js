@@ -82,6 +82,9 @@ function sizeMB(b) { return `${(b / 1e6).toFixed(1)} MB`; }
 const icon = (name, cls = "") => `<svg class="i ${cls}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
 // a stable colour per streamer, for their avatar
 const hue = (s) => [...String(s)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
+// the streamer's Twitch profile picture over a coloured letter; the letter stays if there's no picture
+const avatarHTML = (ch, cls = "") => `<span class="avatar ${cls}" style="--h:${hue(ch)}" aria-hidden="true">${esc((ch || "?")[0])}` +
+  `<img src="/avatars/${encodeURIComponent(ch)}" alt="" loading="lazy" onload="this.classList.add('ok')" onerror="this.remove()"></span>`;
 function dayLabel(iso) {
   const d = new Date(iso), today = new Date();
   const days = Math.round((new Date(today.toDateString()) - new Date(d.toDateString())) / 86400000);
@@ -287,7 +290,7 @@ function makeCard(ch) {
   el.dataset.channel = ch;
   el.innerHTML = `
     <div class="streamer-head">
-      <span class="avatar" style="--h:${hue(ch)}" aria-hidden="true">${esc(ch[0])}</span>
+      ${avatarHTML(ch)}
       <div class="who">
         <h3 title="${esc(ch)}">${esc(ch)}</h3>
         <a class="ext" href="https://www.twitch.tv/${esc(ch)}" target="_blank" rel="noopener">twitch.tv/${esc(ch)}${icon("ext")}</a>
@@ -598,7 +601,7 @@ function clipCard(c) {
     ${thumb}
     <span class="top">${isNew ? `<span class="badge new">NEW</span>` : "<span></span>"}${score}</span>
     <span class="play">${icon("play", "fill")}</span>
-    <span class="meta">${title}<span class="clip-sub"><b>${esc(c.channel)}</b> · <span data-ago="${esc(c.time)}">${ago(c.time)}</span>${c.msgs ? ` · ${c.msgs} msgs` : ""}</span></span>
+    <span class="meta">${title}<span class="clip-sub">${avatarHTML(c.channel, "xs")}<b>${esc(c.channel)}</b> · <span data-ago="${esc(c.time)}">${ago(c.time)}</span>${c.msgs ? ` · ${c.msgs} msgs` : ""}</span></span>
     ${overlay}
   </button>`;
 }
@@ -646,9 +649,7 @@ async function openPlayer(name) {
   const video = $("#player-video");
   video.src = `${src}?v=${c.version}`;
   state.showingSource = false;
-  const avatar = $("#player-avatar");
-  avatar.style.setProperty("--h", hue(c.channel));
-  avatar.textContent = c.channel[0] || "?";
+  $("#player-avatar").outerHTML = avatarHTML(c.channel).replace('<span class="avatar ', '<span id="player-avatar" class="avatar ');
   $("#player-channel").textContent = c.channel;
   $("#player-when").textContent = `${new Date(c.time).toLocaleString()} · ${ago(c.time)}`;
   const h3 = $("#player-title");

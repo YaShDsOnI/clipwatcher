@@ -168,9 +168,14 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
 .streamer { padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; min-width: 0; transition: border-color .2s; }
 .streamer.is-live { border-color: color-mix(in srgb, var(--live) 45%, var(--border)); }
 .streamer-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.avatar { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center;
-  font-weight: 800; font-size: 17px; color: #fff; text-transform: uppercase;
+.avatar { position: relative; overflow: hidden; flex: 0 0 auto; width: 42px; height: 42px; border-radius: 50%;
+  display: grid; place-items: center; font-weight: 800; font-size: 17px; color: #fff; text-transform: uppercase;
   background: linear-gradient(135deg, hsl(var(--h, 258) 70% 62%), hsl(calc(var(--h, 258) + 35) 65% 48%)); }
+.avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity .25s; }
+.avatar img.ok { opacity: 1; }
+.avatar.xs { display: inline-grid; width: 16px; height: 16px; font-size: 9px; vertical-align: -3px; margin-right: 6px; }
+/* a live ring around the picture while recording, like on Twitch */
+.streamer.is-live .avatar { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--live); }
 .who { min-width: 0; flex: 1; }
 .who h3 { margin: 0; font-size: 17px; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .who a.ext { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); font-size: 12.5px; text-decoration: none; }
@@ -303,7 +308,7 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
 .player-video video { display: block; height: min(84vh, 800px); aspect-ratio: 9 / 16; max-width: 56vw; background: #000; }
 .player-side { flex: 1; padding: 22px 24px 20px; overflow: auto; min-width: 0; }
 .player-who { display: flex; align-items: center; gap: 10px; margin-right: 36px; }
-.player-who .avatar { width: 34px; height: 34px; border-radius: 10px; font-size: 15px; }
+.player-who .avatar { width: 36px; height: 36px; font-size: 15px; }
 .player-who strong { display: block; font-size: 15px; line-height: 1.2; }
 .player-side h3 { margin: 14px 0 2px; font-size: 22px; line-height: 1.2; letter-spacing: -.01em; text-transform: uppercase; }
 .player-side h3.plain { text-transform: none; }

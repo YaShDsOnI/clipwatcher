@@ -27,7 +27,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
 # only paths, constants and the job format here: recording and the AI run in their own processes
-from . import ai, components, storage
+from . import ai, avatars, components, storage
 from .captions import TEMPLATES as CAPTION_TEMPLATES
 from .captions import Word
 from .clipper import media_duration, save_meta
@@ -826,7 +826,7 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError:
             return {}
 
-    def send_file(self, path: Path, ctype: str | None = None, download: bool = False):
+    def send_file(self, path: Path, ctype: str | None = None, download: bool = False, cache: str = "no-cache"):
         ctype = ctype or mimetypes.guess_type(path.name)[0] or "application/octet-stream"
         size = path.stat().st_size
         start, end = 0, size - 1
@@ -850,7 +850,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(end - start + 1))
         self.send_header("Accept-Ranges", "bytes")
-        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Cache-Control", cache)
         if download:
             self.send_header("Content-Disposition", f'attachment; filename="{path.name}"')
         self.end_headers()
@@ -918,6 +918,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_error_json(HTTPStatus.NOT_FOUND,
                                             f"Couldn't get a picture of {name}: are they live?")
             return self.send_file(frame, "image/jpeg")
+        if path.startswith("/avatars/"):
+            pic = avatars.avatar(path[len("/avatars/"):])
+            if pic is None:
+                return self.send_error_json(HTTPStatus.NOT_FOUND, "no profile picture")
+            return self.send_file(pic, cache="max-age=86400")
         if path.startswith("/sources/"):
             p = source_path(path[len("/sources/"):])
             if p is None:
